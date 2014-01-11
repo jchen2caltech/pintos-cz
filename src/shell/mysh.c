@@ -4,49 +4,59 @@
 #include <stdlib.h>
 
 #define COMMANDSIZE 100
-#define TOKENSIZE 25;
-#define NUMTOKENS 10;
+#define TOKENSIZE 50
+#define NUMTOKENS 10
 
 char ** mysh_parse(char *command) {
 
     char **tokens;
-    int currtoken = 0;
+    char **currtoken;
     int currmaxtoken = NUMTOKENS;
     int tokenlen = 0;
+    int tokencount = 0;
     int doublequote = 0;
-    int curr = 0;
+    char *curr = command;
+    char *tokencurser;
 
-    tokens = malloc(sizeof(char*) * NUMTOKENS);
-    tokens[0] = malloc(sizeof(char) * TOKENSIZE);
-    while (command[curr] == " ")
+    tokens = (char**)malloc(currmaxtoken * sizeof(char*));
+    currtoken = tokens;
+    *currtoken = (char*)malloc(TOKENSIZE * sizeof(char));
+    tokencurser = *currtoken;
+    while (*curr == (char)' ')
         ++curr;
-    while (command[curr] != NULL) {
-        if (command[curr] != " ") {
-            tokens[currtoken][tokenlen] = curr;
+    while (*curr) {
+        if (*curr != (char)' ') {
+            *tokencurser = *curr;
             ++tokenlen;
             ++curr;
-            if (tokenlen > TOKENSIZE) {
+            ++tokencurser;
+        if (tokenlen > TOKENSIZE) {
                 fprintf(stderr, "token too large");
                 exit(2);
             }
         }
         else {
-            tokens[currtoken][tokenlen] = NULL;
+            *tokencurser = 0;
             ++currtoken;
-            if (currtoken >= currmaxtoken) {
+            ++tokencount;
+            if (tokencount >= currmaxtoken) {
                 currmaxtoken += NUMTOKENS;
-                tokens = relloc(tokens, sizeof(char*) * currmaxtoken);
+                tokens = (char**)realloc(tokens, currmaxtoken * sizeof(char*));
             }
             tokenlen = 0;
-            tokens[currtoken] = malloc(sizeof(char) * TOKENSIZE);
-            while (command[curr] == " ")
+            *currtoken = (char*)malloc(TOKENSIZE * sizeof(char));
+            tokencurser = *currtoken;
+            while (*curr == 32)
                 ++curr;
         }
     }
-    tokens[currtoken][tokenlen] = NULL;
-    tokens[currtoken + 1] = NULL;
+    --tokencurser;
+    *tokencurser = 0;
+    ++currtoken;
+    ++tokencount;
+    *currtoken = (char*)NULL;
     return tokens;
-}               
+}
 
 int main(int argc, char ** argv) {
     
@@ -62,10 +72,11 @@ int main(int argc, char ** argv) {
             exit(2);
         }
         printf("%s:%s> ", login, cwd);
-        if (fgets(command, COMMANDSIZE, stdin) != NULL) {
+        if (fgets(command, 64, stdin) != NULL) {
             tokens = mysh_parse(command);
-            if (strcmp(tokens[0], "exit") == 0) {
-                exit(EXIT_SUCCESS);
+            if (strcmp(*tokens, "exit") == 0) {
+                printf("Exitting shell... \n");
+                running = 0;
             }
         }
     }

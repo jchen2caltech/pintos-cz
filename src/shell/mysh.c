@@ -2,10 +2,12 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include "mysh.h"
 
 #define COMMANDSIZE 100
 #define TOKENSIZE 50
 #define NUMTOKENS 10
+#define NUMCOMMANDS 5
 
 char ** mysh_parse(char *command) {
 
@@ -16,46 +18,136 @@ char ** mysh_parse(char *command) {
     int tokencount = 0;
     int doublequote = 0;
     char *curr = command;
-    char *tokencurser;
+    char *tokencursor;
 
     tokens = (char**)malloc(currmaxtoken * sizeof(char*));
     currtoken = tokens;
     *currtoken = (char*)malloc(TOKENSIZE * sizeof(char));
-    tokencurser = *currtoken;
+    tokencursor = *currtoken;
     while (*curr == (char)' ')
         ++curr;
     while (*curr) {
-        if (*curr != (char)' ') {
-            *tokencurser = *curr;
-            ++tokenlen;
-            ++curr;
-            ++tokencurser;
-        if (tokenlen > TOKENSIZE) {
-                fprintf(stderr, "token too large");
-                exit(2);
+        switch (*curr) {
+        /* Double-quote case */
+        case '"':
+            if (!doublequote) { /* Already inside a double quote */
+                if (tokencursor == *currtoken) { /* if it is a new token */
+                    *tokencursor = *curr;
+                    ++curr;
+                    ++tokenlen;
+                    ++tokencursor;
+                    doublequote = 1;
+                    break;
+                }
+                *tokencursor = 0;   /* End current token to start a quoted one */
             }
-        }
-        else {
-            *tokencurser = 0;
+            else {
+                *tokencursor = *curr;   /* End current quoted one */
+                ++tokenlen;
+                if (tokenlen >= TOKENSIZE) {
+                    fprintf(stderr, "ERROR: TOKEN TOO LARGE");
+                }
+                ++tokencursor;
+                *tokencursor = 0;
+            }
+            /* Start a new token */
             ++currtoken;
             ++tokencount;
             if (tokencount >= currmaxtoken) {
                 currmaxtoken += NUMTOKENS;
                 tokens = (char**)realloc(tokens, currmaxtoken * sizeof(char*));
+                currtoken = (char**)(tokens + tokencount * sizeof(char*));
             }
-            tokenlen = 0;
             *currtoken = (char*)malloc(TOKENSIZE * sizeof(char));
-            tokencurser = *currtoken;
-            while (*curr == 32)
+            tokencursor = *currtoken;
+            tokenlen = 0;
+            if (!doublequote) {
+                doublequote = 1;
+                *tokencursor = *curr;
+                ++tokenlen;
+                ++tokencursor;
                 ++curr;
+            }
+            else {
+                doublequote = 0;
+                ++curr;
+                while (*curr == ' ')
+                    ++curr;
+            }
+            break;
+ 
+        /* Non-whitespace separation characters */
+        case '>':
+        case '<': 
+        case '|':
+            if (!doublequote) {
+                if (tokencursor != *currtoken) {
+                /* Not in a new token; need to end the current one */
+                    *tokencursor = 0;
+                    ++currtoken;
+                    ++tokencount;
+                    if (tokencount >= currmaxtoken) {
+                        currmaxtoken += NUMTOKENS;
+                        tokens = (char**)realloc(tokens, currmaxtoken * sizeof(char*));
+                        currtoken = (char**)(tokens + tokencount * sizeof(char*));
+                    }
+                    *currtoken = (char*)malloc(2 * sizeof(char));
+                    tokencursor = *currtoken;
+                }
+                *tokencursor = *curr;
+                ++tokencursor;
+                ++curr;
+                /* No need to break here, since we'll use the space case code */
+            }
+            /* If already inside a double-quote, will go straight down to default */
+
+        /* White space handling */
+        case ' ':
+            if (!doublequote) { 
+                *tokencursor = 0;
+                ++currtoken;
+                ++tokencount;
+                if (tokencount >= currmaxtoken) {
+                    currmaxtoken += NUMTOKENS;
+                    tokens = (char**)realloc(tokens, currmaxtoken * sizeof(char*));
+                    currtoken = (char**)(tokens + tokencount * sizeof(char*));
+                }
+                tokenlen = 0;
+                *currtoken = (char*)malloc(TOKENSIZE * sizeof(char));
+                tokencursor = *currtoken;
+                while (*curr == ' ')
+                    ++curr;
+                break;
+            }
+            /* If already inside a double-quote, will go straight down to default */    
+
+        default:
+            *tokencursor = *curr;
+            ++tokenlen;
+            ++curr;
+            ++tokencursor;
+            if (tokenlen > TOKENSIZE) {
+                fprintf(stderr, "ERROR: TOKEN TOO LARGE");
+                exit(2);
+            }
         }
     }
-    --tokencurser;
-    *tokencurser = 0;
+    --tokencursor;
+    *tokencursor = 0;
     ++currtoken;
     ++tokencount;
+    if (tokencount >= currmaxtoken) {
+        ++currmaxtoken;
+        tokens = (char**)realloc(tokens, currmaxtoken * sizeof(char*));
+        currtoken = (char**)(tokens + tokencount * sizeof(char*));
+    }
     *currtoken = (char*)NULL;
+    printf("There are %d tokens\n", tokencount);
     return tokens;
+}
+
+shellCommand ** mysh_initcommand(char ** tokens) {
+    return (shellCommand**)NULL;
 }
 
 int main(int argc, char ** argv) {
@@ -72,7 +164,7 @@ int main(int argc, char ** argv) {
             exit(2);
         }
         printf("%s:%s> ", login, cwd);
-        if (fgets(command, 64, stdin) != NULL) {
+        if (fgets(command, COMMANDSIZE, stdin) != NULL) {
             tokens = mysh_parse(command);
             if (strcmp(*tokens, "exit") == 0) {
                 printf("Exitting shell... \n");

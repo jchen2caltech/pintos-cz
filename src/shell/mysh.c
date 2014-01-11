@@ -46,6 +46,7 @@ char ** mysh_parse(char *command) {
                 ++tokenlen;
                 if (tokenlen >= TOKENSIZE) {
                     fprintf(stderr, "ERROR: TOKEN TOO LARGE");
+                    return NULL;
                 }
                 ++tokencursor;
                 *tokencursor = 0;
@@ -131,7 +132,7 @@ char ** mysh_parse(char *command) {
             ++tokencursor;
             if (tokenlen > TOKENSIZE) {
                 fprintf(stderr, "ERROR: TOKEN TOO LARGE");
-                exit(2);
+                return NULL;
             }
         }
     }
@@ -151,38 +152,106 @@ char ** mysh_parse(char *command) {
 }
 
 shellCommand ** mysh_initcommand(char ** tokens) {
-    shellCommand ** commands;
-    int commandcount = 0;
+    shellCommand **commands, **currcommand;
+    int i;
+    int cmdcount = 0;
     int argcount = 0;
     int newcommand = 1;
-    char **args, **currtoken;
+    char **currtoken, **arghead, **currarg;
     
     currtoken = tokens;
     while (*currtoken != NULL) {
-        if (**currtoken != NULL) {
+        if (**currtoken != 0) {
             if (newcommand) {
-                if (strcmp(*currtoken, "|") == 0) {
-                    fprintf(stderr, "ERROR: expecting command around "|" character\n");
+                switch (**currtoken) {
+                case '>':
+                case '<':
+                case '|':
+                    fprintf(stderr, "ERROR: expecting command around | character\n");
                     return (shellCommand**)NULL;
-                }   
-                ++commandcount;
-                ++currtoken;
-                newcommand = 0;
+                default:
+                    ++cmdcount;
+                    ++currtoken;
+                    newcommand = 0;
+                }
             }
             else if (strcmp(*currtoken, "|") == 0) {
                 newcommand = 1;
                 ++currtoken;
             }
+            else {
+                ++currtoken;
+            }
         }
     }
-    printf("%d commands recorded\n", commandcount);
-    return (shellCommand**)NULL;
+    printf("%d commands recorded\n", cmdcount);
+    
+    commands = (shellCommand **)malloc((cmdcount + 1) * sizeof(shellCommand*));
+    currtoken = tokens;
+    currcommand = commands;
+    
+    while (1) {
+        *currcommand = (shellCommand *)malloc(sizeof(shellCommand));
+        (*currcommand)->function = *currtoken;
+        ++currtoken;
+        argcount = 0;
+        if (*currtoken != NULL)
+            arghead = currtoken;
+        while ((*currtoken != NULL) && (**currtoken != 0) && (**currtoken != '|') \
+                && (**currtoken != '>') && (**currtoken != '<')) {
+            ++argcount;
+            ++currtoken;
+        }
+        (*currcommand)->args = (char **) NULL;
+        if (argcount) {
+            (*currcommand)->args = (char **)malloc((argcount+1) * sizeof(char*));
+            currtoken = arghead;
+            currarg = (*currcommand)->args;
+            for (i = 0; i < argcount; i++) {
+                *currarg = *currtoken;
+                ++currarg;
+                ++currtoken;
+            }
+            *currarg = (char *)NULL; 
+        }
+        while ((*currtoken != NULL) && (**currtoken != 0) && (**currtoken != '|')) {
+            switch (**currtoken) {
+            case ('>'):
+                ++currtoken;
+                if ((*currtoken == NULL) || (**currtoken == 0) || \
+                    (**currtoken == '|')) {
+                    fprintf(stderr, "ERROR: syntax error around > character\n");
+                    return NULL;
+                }
+                (*currcommand)->outfile = *currtoken;
+                break;
+            case ('<'):
+                ++currtoken;
+                if ((*currtoken == NULL) || (**currtoken == 0) || \
+                    (**currtoken == '|')) {
+                    fprintf(stderr, "ERROR: syntax error around < character\n");
+                    return NULL;
+                }
+                (*currcommand)->infile = *currtoken;
+                break;
+            default:
+                fprintf(stderr, "ERROR: syntax error\n");
+            }
+            ++currtoken;
+        }
+        if ((*currtoken == NULL) || (**currtoken == 0))
+            break;
+        ++currcommand;            
+    }
+    *currcommand = NULL;
+    return commands;
 }
 
 int main(int argc, char ** argv) {
     
     char *login, *cwd;
     char command[COMMANDSIZE];
+    shellCommand **commands;
     int running = 1;
     char **tokens;
     
@@ -194,10 +263,12 @@ int main(int argc, char ** argv) {
         }
         printf("%s:%s> ", login, cwd);
         if (fgets(command, COMMANDSIZE, stdin) != NULL) {
-            tokens = mysh_parse(command);
-            if (strcmp(*tokens, "exit") == 0) {
-                printf("Exitting shell... \n");
-                running = 0;
+            if ((tokens = mysh_parse(command)) != NULL) {
+                if (strcmp(*tokens, "exit") == 0) {
+                    printf("Exitting shell... \n");
+                    running = 0;
+                }
+                commands = mysh_initcommand(tokens);
             }
         }
     }

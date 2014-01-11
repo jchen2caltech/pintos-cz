@@ -1,7 +1,10 @@
 typedef struct _shellCommand
 {
     char *function;
-    char **arguments;
+    char **args;
+    char *infile;
+    char *outfile;
+    char *errorfile;
 } shellCommand;
 
 

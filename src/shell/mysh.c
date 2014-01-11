@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include "mysh.h"
 
-#define COMMANDSIZE 100
+#define COMMANDSIZE 256
 #define TOKENSIZE 50
 #define NUMTOKENS 10
 #define NUMCOMMANDS 5
@@ -103,18 +103,21 @@ char ** mysh_parse(char *command) {
 
         /* White space handling */
         case ' ':
-            if (!doublequote) { 
-                *tokencursor = 0;
-                ++currtoken;
-                ++tokencount;
-                if (tokencount >= currmaxtoken) {
-                    currmaxtoken += NUMTOKENS;
-                    tokens = (char**)realloc(tokens, currmaxtoken * sizeof(char*));
-                    currtoken = (char**)(tokens + tokencount * sizeof(char*));
+            if (!doublequote) {
+                if (tokencursor != *currtoken) {
+                    /* Consider if the command starts with a space */
+                    *tokencursor = 0;
+                    ++currtoken;
+                    ++tokencount;
+                    if (tokencount >= currmaxtoken) {
+                        currmaxtoken += NUMTOKENS;
+                        tokens = (char**)realloc(tokens, currmaxtoken * sizeof(char*));
+                        currtoken = (char**)(tokens + tokencount * sizeof(char*));
+                    }
+                    tokenlen = 0;
+                    *currtoken = (char*)malloc(TOKENSIZE * sizeof(char));
+                    tokencursor = *currtoken;
                 }
-                tokenlen = 0;
-                *currtoken = (char*)malloc(TOKENSIZE * sizeof(char));
-                tokencursor = *currtoken;
                 while (*curr == ' ')
                     ++curr;
                 break;
@@ -132,6 +135,7 @@ char ** mysh_parse(char *command) {
             }
         }
     }
+    /* the command-line prompt always ends with "\n", but we don't want it */
     --tokencursor;
     *tokencursor = 0;
     ++currtoken;
@@ -147,6 +151,31 @@ char ** mysh_parse(char *command) {
 }
 
 shellCommand ** mysh_initcommand(char ** tokens) {
+    shellCommand ** commands;
+    int commandcount = 0;
+    int argcount = 0;
+    int newcommand = 1;
+    char **args, **currtoken;
+    
+    currtoken = tokens;
+    while (*currtoken != NULL) {
+        if (**currtoken != NULL) {
+            if (newcommand) {
+                if (strcmp(*currtoken, "|") == 0) {
+                    fprintf(stderr, "ERROR: expecting command around "|" character\n");
+                    return (shellCommand**)NULL;
+                }   
+                ++commandcount;
+                ++currtoken;
+                newcommand = 0;
+            }
+            else if (strcmp(*currtoken, "|") == 0) {
+                newcommand = 1;
+                ++currtoken;
+            }
+        }
+    }
+    printf("%d commands recorded\n", commandcount);
     return (shellCommand**)NULL;
 }
 

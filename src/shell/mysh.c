@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/wait.h>
+#include <fcntl.h>
 #include "mysh.h"
 
 #define COMMANDSIZE 256
@@ -256,27 +257,47 @@ shellCommand ** mysh_initcommand(char ** tokens) {
 void mysh_exec(shellCommand **tasks) {
     pid_t childpid;
     char **argv;
-    int i;
+    int i, taskremain, haveprev, fd[2];
     char *function, *temp;
-    shellCommand **currtask = tasks;
+    int in_fd, out_fd;
 
-    argv = (char **)malloc(((*currtask)->argc + 2) * sizeof(char*));
-    function = strdup((*currtask)->function);
-    if (strcmp(function, "exit") == 0)
-        return;
-    for (i = 0; i < (*currtask)->argc; i++) {
-        argv[i+1] = strdup(((*currtask)->args)[i]);
-    }
-    argv[i+1] = NULL;
-    argv[0] = (char *)malloc((strlen(function)+5) * sizeof(char));
-    strcpy(argv[0], "/bin/");
-    strcat(argv[0], function);
-    childpid = fork();
-    if (childpid == 0){
-        execve(argv[0], &argv[0], NULL);
-    }
-    if (childpid) {
-        wait(&childpid);
+
+    shellCommand **currtask = tasks;
+    taskremain = commandcount;
+    haveprev = 0;
+    while (*currtask != NULL) {
+        --taskremain;
+        if (taskremain) {
+        } 
+        argv = (char **)malloc(((*currtask)->argc + 2) * sizeof(char*));
+        function = strdup((*currtask)->function);
+        if (strcmp(function, "exit") == 0)
+            return;
+        for (i = 0; i < (*currtask)->argc; i++) {
+            argv[i+1] = strdup(((*currtask)->args)[i]);
+        }
+        argv[i+1] = NULL;
+        argv[0] = (char *)malloc((strlen(function)+5) * sizeof(char));
+        strcpy(argv[0], "/bin/");
+        strcat(argv[0], function);
+        childpid = fork();
+        if (childpid == 0){
+            if ((*currtask)->infile) {
+                in_fd = open((*currtask)->infile, O_RDONLY);
+                dup2(in_fd, STDIN_FILENO);
+                close(in_fd);
+            }
+            if ((*currtask)->outfile) {
+                out_fd = open((*currtask)->outfile, O_CREAT | O_TRUNC | O_WRONLY, 0);
+                dup2(out_fd, STDOUT_FILENO);
+                close(out_fd);
+            }
+            execve(argv[0], &argv[0], NULL);
+        }
+        if (childpid) {
+            wait(&childpid);
+        }
+        ++currtask;
     }
 }
 
@@ -301,6 +322,7 @@ int main(int argc, char ** argv) {
                 if (strcmp(*tokens, "exit") == 0) {
                     printf("Exitting shell... \n");
                     running = 0;
+                    exit(0);
                 }
                 if ((tasks = mysh_initcommand(tokens)) != NULL) {
                     mysh_exec(tasks);

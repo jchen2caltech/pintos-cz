@@ -151,7 +151,6 @@ char ** mysh_parse(char *command) {
         currtoken = (char**)(tokens + tokencount * sizeof(char*));
     }
     *currtoken = (char*)NULL;
-    printf("There are %d tokens\n", tokencount);
     return tokens;
 }
 
@@ -188,7 +187,6 @@ shellCommand ** mysh_initcommand(char ** tokens) {
             }
         }
     }
-    printf("%d commands recorded\n", cmdcount);
     commandcount = cmdcount;    
 
     commands = (shellCommand **)malloc((cmdcount + 1) * sizeof(shellCommand*));
@@ -258,7 +256,7 @@ void mysh_exec(shellCommand **tasks) {
     pid_t childpid;
     char **argv;
     int i, taskremain, haveprev, fd[2];
-    char *function, *temp;
+    char *function, *path;
     int in_fd, out_fd;
 
 
@@ -271,8 +269,16 @@ void mysh_exec(shellCommand **tasks) {
         } 
         argv = (char **)malloc(((*currtask)->argc + 2) * sizeof(char*));
         function = strdup((*currtask)->function);
-        if (strcmp(function, "exit") == 0)
+        if ((strcmp(function, "cd") == 0) || (strcmp(function, "chdir") == 0)) {
+            if (!(*currtask)->argc) {
+                path = strdup("~");
+            }
+            else {
+                path = strdup(*((*currtask)->args));
+            }
+            chdir(path);
             return;
+        }
         for (i = 0; i < (*currtask)->argc; i++) {
             argv[i+1] = strdup(((*currtask)->args)[i]);
         }

@@ -5,6 +5,8 @@ typedef struct _shellCommand
     char *infile;
     char *outfile;
     char *errorfile;
+
+    int argc;
 } shellCommand;
 
 

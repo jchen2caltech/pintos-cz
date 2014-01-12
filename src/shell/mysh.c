@@ -2,12 +2,15 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <sys/wait.h>
 #include "mysh.h"
 
 #define COMMANDSIZE 256
 #define TOKENSIZE 50
 #define NUMTOKENS 10
 #define NUMCOMMANDS 5
+
+int commandcount;
 
 char ** mysh_parse(char *command) {
 
@@ -185,14 +188,15 @@ shellCommand ** mysh_initcommand(char ** tokens) {
         }
     }
     printf("%d commands recorded\n", cmdcount);
-    
+    commandcount = cmdcount;    
+
     commands = (shellCommand **)malloc((cmdcount + 1) * sizeof(shellCommand*));
     currtoken = tokens;
     currcommand = commands;
     
     while (1) {
         *currcommand = (shellCommand *)malloc(sizeof(shellCommand));
-        (*currcommand)->function = *currtoken;
+        (*currcommand)->function = strdup(*currtoken);
         ++currtoken;
         argcount = 0;
         if (*currtoken != NULL)
@@ -203,12 +207,13 @@ shellCommand ** mysh_initcommand(char ** tokens) {
             ++currtoken;
         }
         (*currcommand)->args = (char **) NULL;
+        (*currcommand)->argc = argcount;
         if (argcount) {
             (*currcommand)->args = (char **)malloc((argcount+1) * sizeof(char*));
             currtoken = arghead;
             currarg = (*currcommand)->args;
             for (i = 0; i < argcount; i++) {
-                *currarg = *currtoken;
+                *currarg = strdup(*currtoken);
                 ++currarg;
                 ++currtoken;
             }
@@ -223,7 +228,7 @@ shellCommand ** mysh_initcommand(char ** tokens) {
                     fprintf(stderr, "ERROR: syntax error around > character\n");
                     return NULL;
                 }
-                (*currcommand)->outfile = *currtoken;
+                (*currcommand)->outfile = strdup(*currtoken);
                 break;
             case ('<'):
                 ++currtoken;
@@ -232,7 +237,7 @@ shellCommand ** mysh_initcommand(char ** tokens) {
                     fprintf(stderr, "ERROR: syntax error around < character\n");
                     return NULL;
                 }
-                (*currcommand)->infile = *currtoken;
+                (*currcommand)->infile = strdup(*currtoken);
                 break;
             default:
                 fprintf(stderr, "ERROR: syntax error\n");
@@ -241,17 +246,46 @@ shellCommand ** mysh_initcommand(char ** tokens) {
         }
         if ((*currtoken == NULL) || (**currtoken == 0))
             break;
-        ++currcommand;            
+        ++currcommand;
     }
+    ++currcommand;
     *currcommand = NULL;
     return commands;
 }
+
+void mysh_exec(shellCommand **tasks) {
+    pid_t childpid;
+    char **argv;
+    int i;
+    char *function, *temp;
+    shellCommand **currtask = tasks;
+
+    argv = (char **)malloc(((*currtask)->argc + 2) * sizeof(char*));
+    function = strdup((*currtask)->function);
+    if (strcmp(function, "exit") == 0)
+        return;
+    for (i = 0; i < (*currtask)->argc; i++) {
+        argv[i+1] = strdup(((*currtask)->args)[i]);
+    }
+    argv[i+1] = NULL;
+    argv[0] = (char *)malloc((strlen(function)+5) * sizeof(char));
+    strcpy(argv[0], "/bin/");
+    strcat(argv[0], function);
+    childpid = fork();
+    if (childpid == 0){
+        execve(argv[0], &argv[0], NULL);
+    }
+    if (childpid) {
+        wait(&childpid);
+    }
+}
+
 
 int main(int argc, char ** argv) {
     
     char *login, *cwd;
     char command[COMMANDSIZE];
-    shellCommand **commands;
+    shellCommand **tasks;
     int running = 1;
     char **tokens;
     
@@ -268,7 +302,9 @@ int main(int argc, char ** argv) {
                     printf("Exitting shell... \n");
                     running = 0;
                 }
-                commands = mysh_initcommand(tokens);
+                if ((tasks = mysh_initcommand(tokens)) != NULL) {
+                    mysh_exec(tasks);
+                }
             }
         }
     }

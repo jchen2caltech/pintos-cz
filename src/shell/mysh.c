@@ -211,6 +211,9 @@ shellCommand ** mysh_initcommand(char ** tokens) {
             ++currtoken;
         }
         (*currcommand)->args = (char **) NULL;
+        (*currcommand)->infile = NULL;
+        (*currcommand)->outfile = NULL;
+        (*currcommand)->errorfile = NULL;
         (*currcommand)->argc = argcount;
         if (argcount) {
             (*currcommand)->args = (char **)malloc((argcount+1) * sizeof(char*));
@@ -355,15 +358,53 @@ int mysh_exec(shellCommand **tasks) {
     return 0;
 }
 
+void mysh_free(char **tokens, shellCommand **commands) {
+    char **curtoken = tokens;
+    shellCommand **curcmd = commands;
+    int i;
+    
+    /*First Free the tokens.*/
+    if (tokens) {
+        while (*curtoken){
+            free(*curtoken);
+            ++curtoken;
+        }
+        free(*curtoken);
+        free(tokens);
+    }
+    
+    /*Then free commands*/
+    if (commands) {
+        while (*curcmd){
+            free((*curcmd)->function);
+            if ((*curcmd)->infile)
+                free((*curcmd)->infile);
+            if ((*curcmd)->outfile)
+                free((*curcmd)->outfile);
+            if ((*curcmd)->errorfile)
+                free((*curcmd)->errorfile);
+            for (i = 0; i < (*curcmd)->argc; i++) {
+                free(((*curcmd)->args)[i]);
+            }
+            free((*curcmd)->args);
+            free(*curcmd);
+            ++curcmd;
+        }
+        free(*curcmd);
+        free(commands);
+    }
+}
 
 int main(int argc, char ** argv) {
     
     char *login, *cwd;
     char command[COMMANDSIZE];
     shellCommand **tasks;
-    char **tokens, **currtoken;
+    char **tokens;
     
     while (1) {
+        tokens = NULL;
+        tasks = NULL;
         login = getlogin();
         if ((cwd = getcwd(NULL, 64)) == NULL) {
             fprintf(stderr, "Fatal error: cannot find current path\n");
@@ -373,15 +414,16 @@ int main(int argc, char ** argv) {
         if (fgets(command, COMMANDSIZE, stdin) != NULL) {
             if (((tokens = mysh_parse(command)) != NULL) && (*tokens)) {
                 if (strcmp(*tokens, "exit") == 0) {
+                    mysh_free(tokens, tasks);
                     printf("Exitting shell... \n");
                     exit(0);
                 }
-                currtoken = tokens;
                 if ((tasks = mysh_initcommand(tokens)) != NULL) {
                     mysh_exec(tasks);
                 }
             }
         }
+        mysh_free(tokens, tasks);
     }
     
     return 1;

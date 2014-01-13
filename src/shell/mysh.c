@@ -13,6 +13,21 @@
 
 int commandcount;
 
+/* mysh_parse
+ *
+ * Description:
+ * Parsing function that tokenizes the command string.
+ * 
+ * Arguments:
+ * -command: pointer to the start of the command string
+ *
+ * Return Value:
+ * -tokens: pointer to an array of token strings
+ *
+ * Possible Errors:
+ * -TOKEN_TOO_LARGE: individual token exceeding set TOKENSIZE
+ */
+
 char ** mysh_parse(char *command) {
 
     /*Tokenize our input command string*/
@@ -163,6 +178,21 @@ char ** mysh_parse(char *command) {
     return tokens;
 }
 
+/* mysh_initcommand
+ *
+ * Description:
+ * This function initializes the command structures based on tokens passed in.
+ *
+ * Arguments:
+ * -tokens: an array of token strings, presumably parsed by mysh_parse
+ *
+ * Return Values:
+ * -commands: an array of shellCommand Structs, each specifying an executable
+ *            task
+ *
+ * Possible Errors:
+ * -SYNTAX_ERROR: happens when the tokens violate certain rules
+ */
 shellCommand ** mysh_initcommand(char ** tokens) {
     shellCommand **commands, **currcommand;
     int i;
@@ -179,7 +209,7 @@ shellCommand ** mysh_initcommand(char ** tokens) {
                 case '>':
                 case '<':
                 case '|':
-                    fprintf(stderr, "ERROR: expecting command around | character\n");
+                    fprintf(stderr, "SYNTAX_ERROR: expecting command around | character\n");
                     return (shellCommand**)NULL;
                 default:
                     ++cmdcount;
@@ -219,6 +249,7 @@ shellCommand ** mysh_initcommand(char ** tokens) {
         (*currcommand)->outfile = NULL;
         (*currcommand)->errorfile = NULL;
         (*currcommand)->argc = argcount;
+        (*currcommand)->append = 0;
         if (argcount) {
             (*currcommand)->args = (char **)malloc((argcount+1) * sizeof(char*));
             currtoken = arghead;
@@ -274,6 +305,27 @@ shellCommand ** mysh_initcommand(char ** tokens) {
     return commands;
 }
 
+/* mysh_exec
+ *
+ * Description:
+ * This function executes the sequence of commands by invoking programs specified, 
+ * or running internal commands (cd & chdir).
+ *
+ * Arguments:
+ * -tasks: pointer to an array of shellCommand structs that specify the task sequence
+ *
+ * Return Value:
+ * 0 on success, -1 on failure.
+ *
+ * Possible Error:
+ * -PIPE_FAILURE
+ * -OPEN_FAILURE
+ * -DUP2_FAILURE
+ * -FORK_FAILURE
+ * -EXECVE_FAILURE
+ * -MALLOC_FAILURE
+ */ 
+
 int mysh_exec(shellCommand **tasks) {
     pid_t childpid;
     char **argv;
@@ -324,6 +376,8 @@ int mysh_exec(shellCommand **tasks) {
         if (childpid == (pid_t)0){
             if ((*currtask)->infile) {
                 in_fd = open((*currtask)->infile, O_RDONLY);
+                if (!in_fd)
+                    perror("ERROR");
                 if (dup2(in_fd, STDIN_FILENO))
                     perror("ERROR");
                 close(in_fd);
@@ -332,10 +386,13 @@ int mysh_exec(shellCommand **tasks) {
                 if ((*currtask)->append) {
                     out_fd = open((*currtask)->outfile, O_CREAT | O_APPEND | O_WRONLY, \
                               S_IRUSR | S_IWUSR);
-                } else {
+                }
+                else {
                      out_fd = open((*currtask)->outfile, O_CREAT | O_TRUNC | O_WRONLY, \
                               S_IRUSR | S_IWUSR);
                 }
+                if (!out_fd)
+                    perror("ERROR");
                 if (dup2(out_fd, STDOUT_FILENO) < 0)
                     perror("ERROR");
                 close(out_fd);
@@ -380,6 +437,22 @@ int mysh_exec(shellCommand **tasks) {
     }
     return 0;
 }
+
+/* mysh_free
+ * 
+ * Description:
+ * This function frees the memory allocated for the token array and command array.
+ *
+ * Arguments:
+ * -tokens: the array of tokens to be free'd
+ * -commands: the array of commands to be free'd
+ *
+ * Return Value:
+ * None.
+ *
+ * Possible Errors:
+ * None.
+ */ 
 
 void mysh_free(char **tokens, shellCommand **commands) {
     char **curtoken = tokens;

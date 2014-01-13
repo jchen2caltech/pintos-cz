@@ -112,12 +112,13 @@ char ** mysh_parse(char *command) {
                 if (tokencursor != *currtoken) {
                     /* Consider if the command starts with a space */
                     *tokencursor = 0;
+                    printf("token %s\n", *currtoken);
                     ++currtoken;
                     ++tokencount;
                     if (tokencount >= currmaxtoken) {
                         currmaxtoken += NUMTOKENS;
                         tokens = (char**)realloc(tokens, currmaxtoken * sizeof(char*));
-                        currtoken = (char**)(tokens + tokencount * sizeof(char*));
+                        currtoken = (char**)((int)tokens + tokencount * sizeof(char*));
                     }
                     tokenlen = 0;
                     *currtoken = (char*)malloc(TOKENSIZE * sizeof(char));
@@ -142,6 +143,7 @@ char ** mysh_parse(char *command) {
     }
     /* the command-line prompt always ends with "\n", but we don't want it */
     if (tokencursor != *currtoken) {
+        *tokencursor = 0; 
         ++currtoken;
         ++tokencount;
         if (tokencount >= currmaxtoken) {
@@ -153,6 +155,7 @@ char ** mysh_parse(char *command) {
     else
         free(*currtoken);
     *currtoken = (char*)NULL;
+    currtoken = tokens;
     return tokens;
 }
 
@@ -255,7 +258,7 @@ shellCommand ** mysh_initcommand(char ** tokens) {
     return commands;
 }
 
-void mysh_exec(shellCommand **tasks) {
+int mysh_exec(shellCommand **tasks) {
     pid_t childpid;
     char **argv;
     int i, taskremain, haveprev, currchild;
@@ -286,7 +289,7 @@ void mysh_exec(shellCommand **tasks) {
                 path = strdup(*((*currtask)->args));
             }
             chdir(path);
-            return;
+            return 0;
         }
         for (i = 0; i < (*currtask)->argc; i++) {
             argv[i+1] = strdup(((*currtask)->args)[i]);
@@ -324,12 +327,12 @@ void mysh_exec(shellCommand **tasks) {
                 close(prevfd[0]);
             }
             execve(argv[0], &argv[0], NULL);
-            perror("ERROR meh");
+            perror("ERROR");
             exit(2);
         }
         else if (childpid < (pid_t) 0) {
             perror("ERROR");
-            return;
+            return -1;
         }
         else {
             if (taskremain) 
@@ -348,7 +351,8 @@ void mysh_exec(shellCommand **tasks) {
     if (commandcount > 1) {
         close(currfd[0]);
         close(currfd[1]);
-    } 
+    }
+    return 0;
 }
 
 
@@ -357,10 +361,9 @@ int main(int argc, char ** argv) {
     char *login, *cwd;
     char command[COMMANDSIZE];
     shellCommand **tasks;
-    int running = 1;
     char **tokens, **currtoken;
     
-    while (running) {
+    while (1) {
         login = getlogin();
         if ((cwd = getcwd(NULL, 64)) == NULL) {
             fprintf(stderr, "Fatal error: cannot find current path\n");
@@ -371,15 +374,9 @@ int main(int argc, char ** argv) {
             if (((tokens = mysh_parse(command)) != NULL) && (*tokens)) {
                 if (strcmp(*tokens, "exit") == 0) {
                     printf("Exitting shell... \n");
-                    running = 0;
                     exit(0);
                 }
                 currtoken = tokens;
-                while (*currtoken) {
-                    printf("this token is %s \n", *currtoken);
-                    ++currtoken;
-                }
-                printf("hahaha\n");
                 if ((tasks = mysh_initcommand(tokens)) != NULL) {
                     mysh_exec(tasks);
                 }

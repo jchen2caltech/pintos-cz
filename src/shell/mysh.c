@@ -30,7 +30,7 @@ char ** mysh_parse(char *command) {
     tokencursor = *currtoken;
     while (*curr == (char)' ')
         ++curr;
-    while (*curr) {
+    while ((*curr) && (*curr != '\n')) {
         switch (*curr) {
         /* Double-quote case */
         case '"':
@@ -141,15 +141,17 @@ char ** mysh_parse(char *command) {
         }
     }
     /* the command-line prompt always ends with "\n", but we don't want it */
-    --tokencursor;
-    *tokencursor = 0;
-    ++currtoken;
-    ++tokencount;
-    if (tokencount >= currmaxtoken) {
-        ++currmaxtoken;
-        tokens = (char**)realloc(tokens, currmaxtoken * sizeof(char*));
-        currtoken = (char**)(tokens + tokencount * sizeof(char*));
+    if (tokencursor != *currtoken) {
+        ++currtoken;
+        ++tokencount;
+        if (tokencount >= currmaxtoken) {
+            ++currmaxtoken;
+            tokens = (char**)realloc(tokens, currmaxtoken * sizeof(char*));
+            currtoken = (char**)(tokens + tokencount * sizeof(char*));
+        }
     }
+    else
+        free(*currtoken);
     *currtoken = (char*)NULL;
     return tokens;
 }
@@ -245,6 +247,7 @@ shellCommand ** mysh_initcommand(char ** tokens) {
         }
         if ((*currtoken == NULL) || (**currtoken == 0))
             break;
+        ++currtoken; 
         ++currcommand;
     }
     ++currcommand;
@@ -255,23 +258,29 @@ shellCommand ** mysh_initcommand(char ** tokens) {
 void mysh_exec(shellCommand **tasks) {
     pid_t childpid;
     char **argv;
-    int i, taskremain, haveprev, fd[2];
-    char *function, *path;
+    int i, taskremain, haveprev, currchild;
+    int currfd[2], prevfd[2];
+    char *function, *path, *login;
     int in_fd, out_fd;
-
 
     shellCommand **currtask = tasks;
     taskremain = commandcount;
     haveprev = 0;
+    currchild = 0;
     while (*currtask != NULL) {
         --taskremain;
         if (taskremain) {
-        } 
+            if (pipe(currfd))
+                perror("ERROR");
+        }
         argv = (char **)malloc(((*currtask)->argc + 2) * sizeof(char*));
         function = strdup((*currtask)->function);
         if ((strcmp(function, "cd") == 0) || (strcmp(function, "chdir") == 0)) {
             if (!(*currtask)->argc) {
-                path = strdup("~");
+                login = getlogin();
+                path = (char *)malloc((strlen(login)+strlen("/home/")) * sizeof(char));
+                strcpy(path, "/home/");
+                strcat(path, login);
             }
             else {
                 path = strdup(*((*currtask)->args));
@@ -287,24 +296,59 @@ void mysh_exec(shellCommand **tasks) {
         strcpy(argv[0], "/bin/");
         strcat(argv[0], function);
         childpid = fork();
-        if (childpid == 0){
+        if (childpid == (pid_t)0){
+            printf("one child forked! %d \n", currchild);
             if ((*currtask)->infile) {
                 in_fd = open((*currtask)->infile, O_RDONLY);
-                dup2(in_fd, STDIN_FILENO);
+                if (dup2(in_fd, STDIN_FILENO))
+                    perror("ERROR");
                 close(in_fd);
             }
             if ((*currtask)->outfile) {
-                out_fd = open((*currtask)->outfile, O_CREAT | O_TRUNC | O_WRONLY, 0);
-                dup2(out_fd, STDOUT_FILENO);
+                out_fd = open((*currtask)->outfile, O_CREAT | O_TRUNC | O_WRONLY, \
+                              S_IRUSR | S_IWUSR);
+                if (dup2(out_fd, STDOUT_FILENO) < 0)
+                    perror("ERROR");
                 close(out_fd);
             }
+            if (taskremain) {
+                if (dup2(currfd[1], STDOUT_FILENO) < 0)
+                    perror("ERROR");
+                close(currfd[0]);
+                close(currfd[1]);
+            }
+            if (haveprev) {
+                if (dup2(prevfd[0], STDIN_FILENO) < 0)
+                    perror("ERROR");
+                close(prevfd[1]);
+                close(prevfd[0]);
+            }
             execve(argv[0], &argv[0], NULL);
+            perror("ERROR meh");
+            exit(2);
         }
-        if (childpid) {
+        else if (childpid < (pid_t) 0) {
+            perror("ERROR");
+            return;
+        }
+        else {
+            if (taskremain) 
+                close(currfd[1]);
             wait(&childpid);
+            if (haveprev) {
+                close(prevfd[0]);  
+            }
+            prevfd[0] = currfd[0];
+            prevfd[1] = currfd[1];
         }
+        ++currchild;
         ++currtask;
+        haveprev = 1;
     }
+    if (commandcount > 1) {
+        close(currfd[0]);
+        close(currfd[1]);
+    } 
 }
 
 
@@ -314,7 +358,7 @@ int main(int argc, char ** argv) {
     char command[COMMANDSIZE];
     shellCommand **tasks;
     int running = 1;
-    char **tokens;
+    char **tokens, **currtoken;
     
     while (running) {
         login = getlogin();
@@ -324,12 +368,18 @@ int main(int argc, char ** argv) {
         }
         printf("%s:%s> ", login, cwd);
         if (fgets(command, COMMANDSIZE, stdin) != NULL) {
-            if ((tokens = mysh_parse(command)) != NULL) {
+            if (((tokens = mysh_parse(command)) != NULL) && (*tokens)) {
                 if (strcmp(*tokens, "exit") == 0) {
                     printf("Exitting shell... \n");
                     running = 0;
                     exit(0);
                 }
+                currtoken = tokens;
+                while (*currtoken) {
+                    printf("this token is %s \n", *currtoken);
+                    ++currtoken;
+                }
+                printf("hahaha\n");
                 if ((tasks = mysh_initcommand(tokens)) != NULL) {
                     mysh_exec(tasks);
                 }

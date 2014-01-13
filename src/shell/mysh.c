@@ -298,8 +298,14 @@ int mysh_exec(shellCommand **tasks) {
         }
         argv[i+1] = NULL;
         argv[0] = (char *)malloc((strlen(function)+5) * sizeof(char));
-        strcpy(argv[0], "/bin/");
-        strcat(argv[0], function);
+        if (function && (*function != '/') && (*function != '.')) {
+            /* If the function doesn't specify a path, add 'bin' before it */
+            strcpy(argv[0], "/bin/");
+            strcat(argv[0], function);
+        }
+        else {  /* If the function specifies a path, use it directly */
+            strcpy(argv[0], function);
+        }
         childpid = fork();
         if (childpid == (pid_t)0){
             if ((*currtask)->infile) {

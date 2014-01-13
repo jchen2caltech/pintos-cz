@@ -26,6 +26,7 @@ int commandcount;
  *
  * Possible Errors:
  * -TOKEN_TOO_LARGE: individual token exceeding set TOKENSIZE
+ * -ALLOC_FAILURE: system cannot allocate memory by malloc or realloc
  */
 
 char ** mysh_parse(char *command) {
@@ -42,6 +43,8 @@ char ** mysh_parse(char *command) {
     char *tokencursor;
 
     tokens = (char**)malloc(currmaxtoken * sizeof(char*));
+    if (!tokens)
+        fprintf(stderr, "ALLOC_FAILURE: Cannot allocate memory by malloc.\n");
     currtoken = tokens;
     *currtoken = (char*)malloc(TOKENSIZE * sizeof(char));
     tokencursor = *currtoken;
@@ -81,9 +84,15 @@ char ** mysh_parse(char *command) {
             if (tokencount >= currmaxtoken) {
                 currmaxtoken += NUMTOKENS;
                 tokens = (char**)realloc(tokens, currmaxtoken * sizeof(char*));
+                if (!tokens)
+                    fprintf(stderr, 
+                    "ALLOC_FAILURE: Cannot allocate memory by realloc.\n");
                 currtoken = (char**)(tokens + tokencount * sizeof(char*));
             }
             *currtoken = (char*)malloc(TOKENSIZE * sizeof(char));
+            if (!currtoken)
+                fprintf(stderr, 
+                        "ALLOC_FAILURE: Cannot allocate memory by malloc.\n");
             tokencursor = *currtoken;
             tokenlen = 0;
             if (!doublequote) {
@@ -114,9 +123,15 @@ char ** mysh_parse(char *command) {
                     if (tokencount >= currmaxtoken) {
                         currmaxtoken += NUMTOKENS;
                         tokens = (char**)realloc(tokens, currmaxtoken * sizeof(char*));
+                        if (!tokens)
+                            fprintf(stderr, 
+                            "ALLOC_FAILURE: Cannot allocate memory by realloc.\n");
                         currtoken = (char**)(tokens + tokencount * sizeof(char*));
                     }
                     *currtoken = (char*)malloc(2 * sizeof(char));
+                    if (!currtoken)
+                        fprintf(stderr, 
+                        "ALLOC_FAILURE: Cannot allocate memory by malloc.\n");
                     tokencursor = *currtoken;
                 }
                 *tokencursor = *curr;
@@ -137,10 +152,16 @@ char ** mysh_parse(char *command) {
                     if (tokencount >= currmaxtoken) {
                         currmaxtoken += NUMTOKENS;
                         tokens = (char**)realloc(tokens, currmaxtoken * sizeof(char*));
+                        if (!tokens)
+                            fprintf(stderr, 
+                            "ALLOC_FAILURE: Cannot allocate memory by realloc.\n");
                         currtoken = (char**)((int)tokens + tokencount * sizeof(char*));
                     }
                     tokenlen = 0;
                     *currtoken = (char*)malloc(TOKENSIZE * sizeof(char));
+                    if (!currtoken)
+                        fprintf(stderr, 
+                        "ALLOC_FAILURE: Cannot allocate memory by malloc.\n");
                     tokencursor = *currtoken;
                 }
                 while (*curr == ' ')
@@ -168,6 +189,9 @@ char ** mysh_parse(char *command) {
         if (tokencount >= currmaxtoken) {
             ++currmaxtoken;
             tokens = (char**)realloc(tokens, currmaxtoken * sizeof(char*));
+            if (!tokens)
+                fprintf(stderr, 
+                        "ALLOC_FAILURE: Cannot allocate memory by realloc.\n");
             currtoken = (char**)(tokens + tokencount * sizeof(char*));
         }
     }
@@ -192,6 +216,7 @@ char ** mysh_parse(char *command) {
  *
  * Possible Errors:
  * -SYNTAX_ERROR: happens when the tokens violate certain rules
+ * -ALLOC_FAILURE: system cannot allocate memory by malloc or realloc
  */
 shellCommand ** mysh_initcommand(char ** tokens) {
     shellCommand **commands, **currcommand;
@@ -229,11 +254,16 @@ shellCommand ** mysh_initcommand(char ** tokens) {
     commandcount = cmdcount;    
 
     commands = (shellCommand **)malloc((cmdcount + 1) * sizeof(shellCommand*));
+    if (!commands)
+        fprintf(stderr, "ALLOC_FAILURE: Cannot allocate memory by malloc.\n");
+                
     currtoken = tokens;
     currcommand = commands;
     
     while (1) {
         *currcommand = (shellCommand *)malloc(sizeof(shellCommand));
+        if (!currcommand)
+            fprintf(stderr, "ALLOC_FAILURE: Cannot allocate memory by malloc.\n");
         (*currcommand)->function = strdup(*currtoken);
         ++currtoken;
         argcount = 0;
@@ -323,7 +353,7 @@ shellCommand ** mysh_initcommand(char ** tokens) {
  * -DUP2_FAILURE
  * -FORK_FAILURE
  * -EXECVE_FAILURE
- * -MALLOC_FAILURE
+ * -ALLOC_FAILURE
  */ 
 
 int mysh_exec(shellCommand **tasks) {
@@ -345,11 +375,15 @@ int mysh_exec(shellCommand **tasks) {
                 perror("ERROR");
         }
         argv = (char **)malloc(((*currtask)->argc + 2) * sizeof(char*));
+        if (!argv)
+            fprintf(stderr, "ALLOC_FAILURE: Cannot allocate memory by malloc.\n");
         function = strdup((*currtask)->function);
         if ((strcmp(function, "cd") == 0) || (strcmp(function, "chdir") == 0)) {
             if (!(*currtask)->argc) {
                 login = getlogin();
                 path = (char *)malloc((strlen(login)+strlen("/home/")) * sizeof(char));
+                if (!path)
+                    fprintf(stderr, "ALLOC_FAILURE: Cannot allocate memory by malloc.\n");
                 strcpy(path, "/home/");
                 strcat(path, login);
             }
@@ -364,6 +398,8 @@ int mysh_exec(shellCommand **tasks) {
         }
         argv[i+1] = NULL;
         argv[0] = (char *)malloc((strlen(function)+5) * sizeof(char));
+        if (!(argv[0]))
+            fprintf(stderr, "ALLOC_FAILURE: Cannot allocate memory by malloc.\n");
         if (function && (*function != '/') && (*function != '.')) {
             /* If the function doesn't specify a path, add 'bin' before it */
             strcpy(argv[0], "/bin/");

@@ -112,7 +112,6 @@ char ** mysh_parse(char *command) {
                 if (tokencursor != *currtoken) {
                     /* Consider if the command starts with a space */
                     *tokencursor = 0;
-                    printf("token %s\n", *currtoken);
                     ++currtoken;
                     ++tokencount;
                     if (tokencount >= currmaxtoken) {
@@ -303,7 +302,6 @@ int mysh_exec(shellCommand **tasks) {
         strcat(argv[0], function);
         childpid = fork();
         if (childpid == (pid_t)0){
-            printf("one child forked! %d \n", currchild);
             if ((*currtask)->infile) {
                 in_fd = open((*currtask)->infile, O_RDONLY);
                 if (dup2(in_fd, STDIN_FILENO))

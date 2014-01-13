@@ -371,6 +371,7 @@ int mysh_exec(shellCommand **tasks) {
     while (*currtask != NULL) {
         --taskremain;
         if (taskremain) {
+            /* Create new pipe if there are tasks remaining */
             if (pipe(currfd))
                 perror("ERROR");
         }
@@ -379,6 +380,7 @@ int mysh_exec(shellCommand **tasks) {
             fprintf(stderr, "ALLOC_FAILURE: Cannot allocate memory by malloc.\n");
         function = strdup((*currtask)->function);
         if ((strcmp(function, "cd") == 0) || (strcmp(function, "chdir") == 0)) {
+            /* cd and chdir implementation */
             if (!(*currtask)->argc) {
                 login = getlogin();
                 path = (char *)malloc((strlen(login)+strlen("/home/")) * sizeof(char));
@@ -386,6 +388,7 @@ int mysh_exec(shellCommand **tasks) {
                     fprintf(stderr, "ALLOC_FAILURE: Cannot allocate memory by malloc.\n");
                 strcpy(path, "/home/");
                 strcat(path, login);
+                /* cd home if address not specified */
             }
             else {
                 path = strdup(*((*currtask)->args));
@@ -394,6 +397,7 @@ int mysh_exec(shellCommand **tasks) {
             return 0;
         }
         for (i = 0; i < (*currtask)->argc; i++) {
+            /* set up arguments */
             argv[i+1] = strdup(((*currtask)->args)[i]);
         }
         argv[i+1] = NULL;

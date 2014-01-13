@@ -324,7 +324,7 @@ int mysh_exec(shellCommand **tasks) {
             }
             if ((*currtask)->outfile) {
                 if ((*currtask)->append) {
-                    out_fd = open((*currtask)->outfile, O_CREAT | O_APPEND | O_WRONLY, \
+                    out_fd = open((*currtask)->outfile, O_CREAT | O_TRUNC | O_WRONLY, \
                               S_IRUSR | S_IWUSR);
                 } else {
                      out_fd = open((*currtask)->outfile, O_CREAT | O_TRUNC | O_WRONLY, \

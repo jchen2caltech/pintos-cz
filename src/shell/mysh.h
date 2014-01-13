@@ -7,6 +7,7 @@ typedef struct _shellCommand
     char *errorfile;
 
     int argc;
+    int append;
 } shellCommand;
 
 

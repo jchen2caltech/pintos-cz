@@ -56,14 +56,13 @@ We defined the follwoing structure:
         char **args;
         char *infile;
         char *outfile;
-        char *errorfile;
 
         int argc;
         int append;
     } shellCommand;
 
 It is easy to see that inside each shellCommand struct, we have the function
-name, the arguments, input/output/error file name ("NULL" if standard), 
+name, the arguments, input/output file name ("NULL" if standard), 
 argument numbers (argc), and the append flag for (>>) defaulted as 0.
 
 Then function mysh_initcommand() will take the processed tokens, and initialize
@@ -119,16 +118,16 @@ shellCommand will be set up as follow:
     tasks[0]: function = "a"
               args = {arg1, arg2, NULL}
               infile = inp.txt
-              out/errorfile = NULL
+              outfile = NULL
               argc = 2
               append = 0
     tasks[1]: function = "b"
               args = {arg1, NULL}
-              in/out/errorfile = NULL
+              in/outfile = NULL
               append = 0
     tasks[2]: function = "c"
               args = {arg1, arg2, arg3, NULL}
-              in/errorfile = NULL
+              infile = NULL
               outfile = out.txt
               append = 0
 
@@ -198,17 +197,38 @@ Shell: Close all pipe ends.
 >> A5: Similarly, describe the details of how terminated processes are
 >> reaped in the example command "a | b | c".
 
+The shell process simply wait() on child that has just been created.
+
 >> A6: Similarly, describe which processes are responsible for setting
 >> up the redirections in the example command
 >> "a < inp.txt | b | c > out.txt".
+
+This is simply a mix of my answer to A3 and A4. The shell process will
+be responsible for creating the pipes, but a, b and c will be
+performing their redirections on their own. Namely, a will replace 
+STDIN with inp.txt, STDOUT with currpipe[1]; b will replace STDIN
+with prevpipe[0] and STDOUT with currpipe[1]; c will replace STDIN
+prevpipe[0] and STDOUT with out.txt. 
 
 ---- RATIONALE ----
 
 >> A?: Why do the chdir and exit commands have to be implemented as
 >> built-in functions, rather than external programs?
 
+Because "exit" and "cd" only make sense if they are executed by the
+parent process. If there are executed in the same way as others, 
+using external programs, the child process that is running the
+command will "exit" or "cd", but this doesn't affect the shell
+process. Therefore, they have to be implemented as built-in commands.
+
 >> A6: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+Using two pipes saves memory if there are multiple tasks on
+the pipeline, compared to the design that initializes a number of pipes
+prior to all childs based on number of commands given. For
+redirections, since it has to be performed inside the child process,
+there is no other way of doing this. 
 
 			  SURVEY QUESTIONS
 			  ================

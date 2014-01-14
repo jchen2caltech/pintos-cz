@@ -1,4 +1,4 @@
-typedef struct _shellCommand
+typedef struct _shell_command
 {
     char *function;
     char **args;
@@ -7,6 +7,6 @@ typedef struct _shellCommand
 
     int argc;
     int append;
-} shellCommand;
+} shell_command;
 
 

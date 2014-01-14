@@ -48,7 +48,7 @@ breaking the example command into tokens of
     "a", "arg1", "arg2", "|", "b", "arg1", "|", "c", "arg1", "arg2", "arg3".
 
 
-We defined the follwoing structure:
+We define the following structure:
 
     typedef struct _shellCommand
     {
@@ -203,7 +203,7 @@ The shell process simply wait() on child that has just been created.
 >> up the redirections in the example command
 >> "a < inp.txt | b | c > out.txt".
 
-This is simply a mix of my answer to A3 and A4. The shell process will
+This is simply a mix of our answer to A3 and A4. The shell process will
 be responsible for creating the pipes, but a, b and c will be
 performing their redirections on their own. Namely, a will replace 
 STDIN with inp.txt, STDOUT with currpipe[1]; b will replace STDIN

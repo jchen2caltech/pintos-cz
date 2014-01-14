@@ -218,6 +218,7 @@ char ** mysh_parse(char *command) {
  * -SYNTAX_ERROR: happens when the tokens violate certain rules
  * -ALLOC_FAILURE: system cannot allocate memory by malloc or realloc
  */
+
 shellCommand ** mysh_initcommand(char ** tokens) {
     shellCommand **commands, **currcommand;
     int i;
@@ -228,6 +229,7 @@ shellCommand ** mysh_initcommand(char ** tokens) {
     
     currtoken = tokens;
     while (*currtoken != NULL) {
+        /* count number of commands */
         if (**currtoken != 0) {
             if (newcommand) {
                 switch (**currtoken) {
@@ -261,6 +263,7 @@ shellCommand ** mysh_initcommand(char ** tokens) {
     currcommand = commands;
     
     while (1) {
+        /* Initialize a new command struct */
         *currcommand = (shellCommand *)malloc(sizeof(shellCommand));
         if (!currcommand)
             fprintf(stderr, "ALLOC_FAILURE: Cannot allocate memory by malloc.\n");
@@ -271,6 +274,7 @@ shellCommand ** mysh_initcommand(char ** tokens) {
             arghead = currtoken;
         while ((*currtoken != NULL) && (**currtoken != 0) && (**currtoken != '|') \
                 && (**currtoken != '>') && (**currtoken != '<')) {
+            /* Count the number of arguments */
             ++argcount;
             ++currtoken;
         }
@@ -281,6 +285,7 @@ shellCommand ** mysh_initcommand(char ** tokens) {
         (*currcommand)->argc = argcount;
         (*currcommand)->append = 0;
         if (argcount) {
+            /* Fill in the argument array */
             (*currcommand)->args = (char **)malloc((argcount+1) * sizeof(char*));
             currtoken = arghead;
             currarg = (*currcommand)->args;
@@ -292,6 +297,7 @@ shellCommand ** mysh_initcommand(char ** tokens) {
             *currarg = (char *)NULL; 
         }
         while ((*currtoken != NULL) && (**currtoken != 0) && (**currtoken != '|')) {
+            /* Set up the I/O redirection */
             switch (**currtoken) {
             case ('>'):
                 (*currcommand)->append = 0;
@@ -300,7 +306,9 @@ shellCommand ** mysh_initcommand(char ** tokens) {
                     (**currtoken == '|')) {
                     fprintf(stderr, "ERROR: syntax error around > character\n");
                     return NULL;
-                } else if (**currtoken == '>') {
+                } 
+                else if (**currtoken == '>') {
+                    /* Append to existing file instead of truncating */
                     (*currcommand)->append = 1;
                     ++currtoken;
                     if ((*currtoken == NULL) || (**currtoken == 0) || \
@@ -414,6 +422,7 @@ int mysh_exec(shellCommand **tasks) {
         }
         childpid = fork();
         if (childpid == (pid_t)0){
+            /* Set up redirections */
             if ((*currtask)->infile) {
                 in_fd = open((*currtask)->infile, O_RDONLY);
                 if (!in_fd)
@@ -437,6 +446,7 @@ int mysh_exec(shellCommand **tasks) {
                     perror("ERROR");
                 close(out_fd);
             }
+            /* Set up piping if there is any */
             if (taskremain) {
                 if (dup2(currfd[1], STDOUT_FILENO) < 0)
                     perror("ERROR");

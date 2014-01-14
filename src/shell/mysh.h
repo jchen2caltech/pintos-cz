@@ -4,7 +4,6 @@ typedef struct _shellCommand
     char **args;
     char *infile;
     char *outfile;
-    char *errorfile;
 
     int argc;
     int append;

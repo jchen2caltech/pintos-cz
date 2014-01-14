@@ -13,6 +13,8 @@ Taokun Zheng <tzheng@caltech.edu>
 
 >> Specify how many late tokens you are using on this assignment:  
 
+0
+
 >> What is the Git repository and commit hash for your submission?
 
    Repository URL:  
@@ -38,16 +40,15 @@ Taokun Zheng <tzheng@caltech.edu>
 >> shell internally represent such a command?
 
 For each one-line string command input, our shell will first break
-the command string (char*) into tokens (char**), according to
-whitespace and special characters like ("|", "<", ">"). Note anything
-inside a pair of double quotes is regarded as one single token. We 
-defined the function "mysh_parse" to do this. So in this case we are 
+the command string (char*) into an array of tokens (char**), based on
+separators such as whitespace and special characters like ("|", "<", ">"). 
+Note anything inside a pair of double quotes is regarded as one single token. 
+We defined the function "mysh_parse" to do this. So in this case we are 
 breaking the example command into tokens of 
     "a", "arg1", "arg2", "|", "b", "arg1", "|", "c", "arg1", "arg2", "arg3".
 
-Then our shell will process the tokens and break them into individual
-commands (shellCommand**). We created the shellCommand struct, which is
-the individual command we will pass to execute.
+
+We defined the follwoing structure:
 
     typedef struct _shellCommand
     {
@@ -63,15 +64,18 @@ the individual command we will pass to execute.
 
 It is easy to see that inside each shellCommand struct, we have the function
 name, the arguments, input/output/error file name ("NULL" if standard), 
-argument numbers (argc), and the append flag for (>>) defaulted as 0. 
-We will iterate through each token: 
+argument numbers (argc), and the append flag for (>>) defaulted as 0.
 
-1) whenever we see "|", we will create a new shellcommand; 
+Then function mysh_initcommand() will take the processed tokens, and initialize
+shellCommand structs based on the tokens. Inside mysh_initicommand(), we will 
+iterate through each token:
+
+1) whenever we see "|"(or upon the first token), we will create a new shellCommand; 
 2) the first token after the creation of a new shellcommand will be the 
     function name;
 3) if we see ">":
     a) if the next token is ">", then the token after these two
-        ">"'s will be set to outfile, and the append flag will be set to 1;
+        ">"'s will be set to outfile, and the append flag will be set;
     b) if the next token is not ">", then the token after the ">" will be set
         to outfile.
 4) if we see "<":
@@ -82,17 +86,17 @@ We will iterate through each token:
 We defined mysh_initcommand to accomplish all the above. Hence in our example
 we will have a shellcommands array (tasks) of three shellcommands:
     tasks[0]: function = "a", 
-            args is the array pointer of ["arg1", "arg2"]
+            args is the array pointer of {"arg1", "arg2", NULL}
             in/out/errorfile are all NULL
             argc = 2
             append = 0
     tasks[1]: function = "b",
-            args is the array  pointer of ["arg1"]
+            args is the array  pointer of {"arg1", NULL}
             in/out/errorfile are all NULL
             argc = 1
             append = 0
     tasks[2]: function = "c",
-            args is the array pointer of ["arg1", "arg2", "arg3"]
+            args is the array pointer of {"arg1", "arg2", "arg3", NULL}
             in/out/errorfile are all NULL
             argc = 3
             append = 0
@@ -106,11 +110,53 @@ to mysh_exec to execute each individual command tasks.
 >> Briefly explain specifically how the redirections are parsed and
 >> represented, and by what processes.
 
+As explained above, when the mysh_initcommand() function encounters
+'>' or '<', it will check for next token. If the token is a normal
+token (not '|' or '>' or '<' or NULL), it will be added to the
+shellCommand struct as the file path for input/output. 
+shellCommand will be set up as follow:
+
+    tasks[0]: function = "a"
+              args = {arg1, arg2, NULL}
+              infile = inp.txt
+              out/errorfile = NULL
+              argc = 2
+              append = 0
+    tasks[1]: function = "b"
+              args = {arg1, NULL}
+              in/out/errorfile = NULL
+              append = 0
+    tasks[2]: function = "c"
+              args = {arg1, arg2, arg3, NULL}
+              in/errorfile = NULL
+              outfile = out.txt
+              append = 0
+
 ---- ALGORITHMS ----
 
 >> A3: Illustrate how you solved the problem of setting up
 >> redirection in a simple command like "a < inp.txt > out.txt", by
 >> describing what process takes care of the redirection and when.
+
+The shell process will set up the function path, the args[] array, 
+and then if the function indicates an external program, it will do
+the following:
+
+(1) fork a child
+(2) wait for its execution
+
+The child will set up the redirections. It will:
+
+(1) If command->infile not NULL, it will open the indicated path
+    with RDONLY set. It will then replace STDIN with the opened file
+    descriptor using dup2(), and then close the opened file. 
+(2) If command->outfile not NULL, it will open the indicated path
+    with WRITE and CREATE flags set. It will then replace STDOUT with
+    the opened file descriptor using dup2(), and then close the opened
+    file. 
+
+Note that open() failures will cause the function to return, and the
+shell will output an error message, but the prompt will continue.
 
 >> A4: Illustrate how you solved the problem of setting up the pipes
 >> between multiple operations in a single command, by describing
@@ -120,6 +166,34 @@ to mysh_exec to execute each individual command tasks.
 >> process, and going through the execution of programs a, b and c.
 >> Keep your description of each process' responsibilities limited to
 >> ~25 words or less.
+
+Using example "a | b | c":
+
+Shell: check that there are tasks after <a>, so it calls pipe(currpipe),
+       where currpipe is a int[2]. It will then fork(), close
+       currpipe[1], and wait for <a> to terminate.
+
+a:     It will see that there are tasks afterwards but no one before, 
+       so it replace STDOUT with currpipe[1]. It will then close both
+       ends of currpipe and execute the program. 
+
+Shell: It will move currpipe into prevpipe. It then moves on to <b>, 
+       and sees that there are task remaining, so it will pipe(currpipe)
+       and then fork(), close currpipe[1], and wait for <b>. 
+
+b:     It will see that there are tasks both before and after it. It will
+       replace STDOUT with currpipe[1], and STDIN with prevpipe[0]. 
+       It will then close all pipe ends and execute the program.
+
+Shell: Close prevpipe ends, move currpipe into prevpipe. It then moves
+       on to <c>, and sees that there are no task remaining. It will
+       fork() and wait for <c>.
+
+c:     It will see that there are tasks before but not after. It will
+       replace STDIN with prevpipe[0] and close all pipe ends and 
+       execute the program.
+
+Shell: Close all pipe ends.
 
 >> A5: Similarly, describe the details of how terminated processes are
 >> reaped in the example command "a | b | c".

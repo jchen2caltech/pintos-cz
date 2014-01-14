@@ -281,7 +281,6 @@ shellCommand ** mysh_initcommand(char ** tokens) {
         (*currcommand)->args = (char **) NULL;
         (*currcommand)->infile = NULL;
         (*currcommand)->outfile = NULL;
-        (*currcommand)->errorfile = NULL;
         (*currcommand)->argc = argcount;
         (*currcommand)->append = 0;
         if (argcount) {
@@ -527,8 +526,6 @@ void mysh_free(char **tokens, shellCommand **commands) {
                 free((*curcmd)->infile);
             if ((*curcmd)->outfile)
                 free((*curcmd)->outfile);
-            if ((*curcmd)->errorfile)
-                free((*curcmd)->errorfile);
             for (i = 0; i < (*curcmd)->argc; i++) {
                 free(((*curcmd)->args)[i]);
             }

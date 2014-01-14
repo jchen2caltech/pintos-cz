@@ -565,7 +565,7 @@ void mysh_free(char **tokens, shell_command **commands) {
     }
 }
 
-int main(int argc, char ** argv) {
+int main(void) {
     
     char *login, *cwd;
     char command[COMMAND_SIZE];

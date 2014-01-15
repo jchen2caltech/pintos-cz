@@ -6,12 +6,12 @@
     external program execution, several built-in commands, I/O 
     redirection, command pipeline. 
     Command maximum size is defined in COMMAND_SIZE, currently set at
-    256 characters. It can be changed by simply resetting the definition
+    512 characters. It can be changed by simply resetting the definition
     below.
     Incoming command input will be parsed into "tokens", which will then
     be taken to initialize shell_command struct. Any token must be
     smaller than TOKEN_SIZE characters in size, which is currently set
-    at 50. This can be changed by simply resetting the definition below.
+    at 64. This can be changed by simply resetting the definition below.
     The shell can (in theory) take infinite amount of tokens. 
     After tokens have been processed into individual tasks, the shell
     will check if the task indicates a built-in command or external
@@ -39,8 +39,8 @@
 #include <fcntl.h>
 #include "mysh.h"
 
-#define COMMAND_SIZE 256
-#define TOKEN_SIZE 50
+#define COMMAND_SIZE 512
+#define TOKEN_SIZE 64
 #define NUM_TOKENS 10
 #define INIT_ARCHIVE_SIZE 10
 

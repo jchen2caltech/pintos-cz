@@ -1,3 +1,36 @@
+/*! An implementation of command shell
+    
+    Author: Jianchi Chen, Taokun Zheng
+    
+    The command shell provides basic shell functionality such as 
+    external program execution, several built-in commands, I/O 
+    redirection, command pipeline. 
+    Command maximum size is defined in COMMAND_SIZE, currently set at
+    256 characters. It can be changed by simply resetting the definition
+    below.
+    Incoming command input will be parsed into "tokens", which will then
+    be taken to initialize shell_command struct. Any token must be
+    smaller than TOKEN_SIZE characters in size, which is currently set
+    at 50. This can be changed by simply resetting the definition below.
+    The shell can (in theory) take infinite amount of tokens. 
+    After tokens have been processed into individual tasks, the shell
+    will check if the task indicates a built-in command or external
+    program. The shell will fork a child process to execute the program
+    if it is the latter. 
+    The program path can be an absolute path, or simply the program name
+    if the program is in the /bin/ directory. A "no such file or 
+    directory" error will be returned if the program path is invalid.  
+    The user can exit the shell by invoking the "exit" command. 
+
+    Two Extra-Credit features have been added to the shell:
+    1) ">>" instead of ">" redirection. This will redirect output to
+       append to an existing file rather than truncating it. 
+    2) "history" and "!n" command. The shell has a command archive that
+       stores previous commands since it's started. "history" command
+       will display all previous commands and their indices. "!n" will
+       re-execute the command at index <n> in history. 
+ */
+
 #include <string.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -15,7 +48,7 @@ int task_count;
 int command_count;
 char **command_archive;
 
-/* mysh_parse
+/*!mysh_parse
  *
  * Description:
  * Parsing function that tokenizes the command string.
@@ -220,7 +253,7 @@ char ** mysh_parse(char *command) {
     return tokens;
 }
 
-/* mysh_initcommand
+/*!mysh_initcommand
  *
  * Description:
  * This function initializes the command structures based on tokens passed in.
@@ -362,7 +395,7 @@ shell_command ** mysh_initcommand(char ** tokens) {
     return commands;
 }
 
-/* mysh_exec
+/*!mysh_exec
  *
  * Description:
  * This function executes the sequence of commands by invoking programs specified, 
@@ -462,7 +495,7 @@ int mysh_exec(shell_command **tasks) {
                               S_IRUSR | S_IWUSR);
                 }
                 else {
-                     out_fd = open((*currtask)->outfile, O_CREAT | O_TRUNC | O_WRONLY, \
+                    out_fd = open((*currtask)->outfile, O_CREAT | O_TRUNC | O_WRONLY, \
                               S_IRUSR | S_IWUSR);
                 }
                 if (!out_fd)
@@ -513,7 +546,7 @@ int mysh_exec(shell_command **tasks) {
     return 0;
 }
 
-/* mysh_free
+/*!mysh_free
  * 
  * Description:
  * This function frees the memory allocated for the token array and 

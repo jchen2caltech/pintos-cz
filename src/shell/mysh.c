@@ -103,7 +103,7 @@ char ** mysh_parse(char *command) {
                     doublequote = 1;
                     break;
                 }
-                *tokencursor = 0;   /* End current token to start a quoted one */
+                *tokencursor = 0;   /* End current token */
             }
             else {
                 *tokencursor = *curr;   /* End current quoted one */
@@ -163,13 +163,15 @@ char ** mysh_parse(char *command) {
                     ++tokencount;
                     if (tokencount >= currmaxtoken) {
                         currmaxtoken += NUM_TOKENS;
-                        tokens = (char**)realloc(tokens, currmaxtoken * sizeof(char*));
+                        tokens = (char**)realloc(tokens, 
+                                                 currmaxtoken * sizeof(char*));
                         if (!tokens) {
                             fprintf(stderr, 
-                            "ALLOC_FAILURE: Cannot allocate memory by realloc.\n");
+                        "ALLOC_FAILURE: Cannot allocate memory by realloc\n");
                             exit(1);
                         }
-                        currtoken = (char**)(tokens + tokencount * sizeof(char*));
+                        currtoken = (char**)(tokens + \
+                                             tokencount * sizeof(char*));
                     }
                     *currtoken = (char*)malloc(2 * sizeof(char));
                     if (!currtoken) {
@@ -182,9 +184,9 @@ char ** mysh_parse(char *command) {
                 *tokencursor = *curr;
                 ++tokencursor;
                 ++curr;
-                /* No need to break here, since we'll use the space case code */
+                /* No need to break here, since we'll need whitespace code */
             }
-            /* If already inside a double-quote, will go straight down to default */
+            /* If already inside a double-quote, will go to default */
 
         /* White space handling */
         case ' ':
@@ -196,13 +198,15 @@ char ** mysh_parse(char *command) {
                     ++tokencount;
                     if (tokencount >= currmaxtoken) {
                         currmaxtoken += NUM_TOKENS;
-                        tokens = (char**)realloc(tokens, currmaxtoken * sizeof(char*));
+                        tokens = (char**)realloc(tokens, 
+                                                 currmaxtoken * sizeof(char*));
                         if (!tokens) {
                             fprintf(stderr, 
-                            "ALLOC_FAILURE: Cannot allocate memory by realloc.\n");
+                        "ALLOC_FAILURE: Cannot allocate memory by realloc.\n");
                             exit(1);
                         } 
-                        currtoken = (char**)((int)tokens + tokencount * sizeof(char*));
+                        currtoken = (char**)((int)tokens + \
+                                              tokencount * sizeof(char*));
                     }
                     tokenlen = 0;
                     *currtoken = (char*)malloc(TOKEN_SIZE * sizeof(char));
@@ -217,7 +221,7 @@ char ** mysh_parse(char *command) {
                     ++curr;
                 break;
             }
-            /* If already inside a double-quote, will go straight down to default */    
+            /* If already inside a double-quote, will go to default */    
 
         default:
             *tokencursor = *curr;
@@ -287,7 +291,8 @@ shell_command ** mysh_initcommand(char ** tokens) {
                 case '>':
                 case '<':
                 case '|':
-                    fprintf(stderr, "SYNTAX_ERROR: expecting command around | character\n");
+                    fprintf(stderr, 
+                    "SYNTAX_ERROR: expecting command around | character\n");
                     return (shell_command**)NULL;
                 default:
                     ++cmdcount;
@@ -306,7 +311,8 @@ shell_command ** mysh_initcommand(char ** tokens) {
     }
     task_count = cmdcount;    
 
-    commands = (shell_command **)malloc((cmdcount + 1) * sizeof(shell_command*));
+    commands = (shell_command **)malloc((cmdcount + 1) * \
+               sizeof(shell_command*));
     if (!commands)
         fprintf(stderr, "ALLOC_FAILURE: Cannot allocate memory by malloc.\n");
                 
@@ -317,7 +323,8 @@ shell_command ** mysh_initcommand(char ** tokens) {
         /* Initialize a new command struct */
         *currcommand = (shell_command *)malloc(sizeof(shell_command));
         if (!currcommand) {
-            fprintf(stderr, "ALLOC_FAILURE: Cannot allocate memory by malloc.\n");
+            fprintf(stderr, 
+            "ALLOC_FAILURE: Cannot allocate memory by malloc.\n");
             exit(1);
         }
         (*currcommand)->function = strdup(*currtoken);
@@ -325,8 +332,9 @@ shell_command ** mysh_initcommand(char ** tokens) {
         argcount = 0;
         if (*currtoken != NULL)
             arghead = currtoken;
-        while ((*currtoken != NULL) && (**currtoken != 0) && (**currtoken != '|') \
-                && (**currtoken != '>') && (**currtoken != '<')) {
+        while ((*currtoken != NULL) && (**currtoken != 0) && \
+                (**currtoken != '|') && (**currtoken != '>') && \
+                (**currtoken != '<')) {
             /* Count the number of arguments */
             ++argcount;
             ++currtoken;
@@ -338,7 +346,8 @@ shell_command ** mysh_initcommand(char ** tokens) {
         (*currcommand)->append = 0;
         if (argcount) {
             /* Fill in the argument array */
-            (*currcommand)->args = (char **)malloc((argcount+1) * sizeof(char*));
+            (*currcommand)->args = (char **)malloc((argcount+1) * \
+                                   sizeof(char*));
             currtoken = arghead;
             currarg = (*currcommand)->args;
             for (i = 0; i < argcount; i++) {
@@ -348,7 +357,8 @@ shell_command ** mysh_initcommand(char ** tokens) {
             }
             *currarg = (char *)NULL; 
         }
-        while ((*currtoken != NULL) && (**currtoken != 0) && (**currtoken != '|')) {
+        while ((*currtoken != NULL) && (**currtoken != 0) && \
+               (**currtoken != '|')) {
             /* Set up the I/O redirection */
             switch (**currtoken) {
             case ('>'):
@@ -356,7 +366,8 @@ shell_command ** mysh_initcommand(char ** tokens) {
                 ++currtoken;
                 if ((*currtoken == NULL) || (**currtoken == 0) || \
                     (**currtoken == '|')) {
-                    fprintf(stderr, "ERROR: syntax error around > character\n");
+                    fprintf(stderr, 
+                    "ERROR: syntax error around > character\n");
                     return NULL;
                 } 
                 else if (**currtoken == '>') {
@@ -365,7 +376,8 @@ shell_command ** mysh_initcommand(char ** tokens) {
                     ++currtoken;
                     if ((*currtoken == NULL) || (**currtoken == 0) || \
                         (**currtoken == '|')) {
-                        fprintf(stderr, "ERROR: syntax error around > character\n");
+                        fprintf(stderr, 
+                        "ERROR: syntax error around > character\n");
                         return NULL;
                     }
                 }
@@ -375,7 +387,8 @@ shell_command ** mysh_initcommand(char ** tokens) {
                 ++currtoken;
                 if ((*currtoken == NULL) || (**currtoken == 0) || \
                     (**currtoken == '|')) {
-                    fprintf(stderr, "ERROR: syntax error around < character\n");
+                    fprintf(stderr, 
+                    "ERROR: syntax error around < character\n");
                     return NULL;
                 }
                 (*currcommand)->infile = strdup(*currtoken);
@@ -398,11 +411,12 @@ shell_command ** mysh_initcommand(char ** tokens) {
 /*!mysh_exec
  *
  * Description:
- * This function executes the sequence of commands by invoking programs specified, 
- * or running internal commands (cd & chdir).
+ * This function executes the sequence of commands by invoking 
+ * programs specified, or running internal commands (cd & chdir).
  *
  * Arguments:
- * -tasks: pointer to an array of shell_command structs that specify the task sequence
+ * -tasks: pointer to an array of shell_command structs that specify 
+ *         the task sequence
  *
  * Return Value:
  * 0 on success, -1 on failure.
@@ -437,17 +451,21 @@ int mysh_exec(shell_command **tasks) {
         }
         argv = (char **)malloc(((*currtask)->argc + 2) * sizeof(char*));
         if (!argv) {
-            fprintf(stderr, "ALLOC_FAILURE: Cannot allocate memory by malloc.\n");
+            fprintf(stderr, 
+            "ALLOC_FAILURE: Cannot allocate memory by malloc.\n");
             exit(1);
         }
         function = strdup((*currtask)->function);
-        if ((strcmp(function, "cd") == 0) || (strcmp(function, "chdir") == 0)) {
+        if ((strcmp(function, "cd") == 0) || \
+            (strcmp(function, "chdir") == 0)) {
             /* cd and chdir implementation */
             if (!(*currtask)->argc) {
                 login = getlogin();
-                path = (char *)malloc((strlen(login)+strlen("/home/")) * sizeof(char));
+                path = (char *)malloc((strlen(login) + \
+                        strlen("/home/")) * sizeof(char));
                 if (!path) {
-                    fprintf(stderr, "ALLOC_FAILURE: Cannot allocate memory by malloc.\n");
+                    fprintf(stderr, 
+                    "ALLOC_FAILURE: Cannot allocate memory by malloc.\n");
                     exit(1);
                 }
                 strcpy(path, "/home/");
@@ -467,7 +485,8 @@ int mysh_exec(shell_command **tasks) {
         argv[i+1] = NULL;
         argv[0] = (char *)malloc((strlen(function)+5) * sizeof(char));
         if (!(argv[0])) {
-            fprintf(stderr, "ALLOC_FAILURE: Cannot allocate memory by malloc.\n");
+            fprintf(stderr, 
+            "ALLOC_FAILURE: Cannot allocate memory by malloc.\n");
             exit(1);
         }
         if (function && (*function != '/') && (*function != '.')) {
@@ -491,12 +510,12 @@ int mysh_exec(shell_command **tasks) {
             }
             if ((*currtask)->outfile) {
                 if ((*currtask)->append) {
-                    out_fd = open((*currtask)->outfile, O_CREAT | O_APPEND | O_WRONLY, \
-                              S_IRUSR | S_IWUSR);
+                    out_fd = open((*currtask)->outfile, \
+                             O_CREAT | O_APPEND | O_WRONLY, S_IRUSR | S_IWUSR);
                 }
                 else {
-                    out_fd = open((*currtask)->outfile, O_CREAT | O_TRUNC | O_WRONLY, \
-                              S_IRUSR | S_IWUSR);
+                    out_fd = open((*currtask)->outfile, \
+                             O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR);
                 }
                 if (!out_fd)
                     perror("ERROR");
@@ -636,7 +655,7 @@ int main(void) {
                             mysh_free(tokens, tasks);
                             if (i > command_count) {
                                 fprintf(stderr, 
-                                "SYNTAX_ERROR: integer out of archive range \n");
+                            "SYNTAX_ERROR: integer out of archive range \n");
                                 tokens = NULL; /* Avoid following executions */
                             }
                             else {

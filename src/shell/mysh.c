@@ -6,12 +6,12 @@
     external program execution, several built-in commands, I/O 
     redirection, command pipeline. 
     Command maximum size is defined in COMMAND_SIZE, currently set at
-    512 characters. It can be changed by simply resetting the definition
+    1023 characters. It can be changed by simply resetting the definition
     below.
     Incoming command input will be parsed into "tokens", which will then
     be taken to initialize shell_command struct. Any token must be
     smaller than TOKEN_SIZE characters in size, which is currently set
-    at 64. This can be changed by simply resetting the definition below.
+    at 63. This can be changed by simply resetting the definition below.
     The shell can (in theory) take infinite amount of tokens. 
     After tokens have been processed into individual tasks, the shell
     will check if the task indicates a built-in command or external
@@ -39,10 +39,12 @@
 #include <fcntl.h>
 #include "mysh.h"
 
-#define COMMAND_SIZE 511
-#define TOKEN_SIZE 64
-#define NUM_TOKENS 10
-#define INIT_ARCHIVE_SIZE 10
+#define COMMAND_SIZE 1023        /* Maximum command length */
+#define TOKEN_SIZE 63            /* Maximum length of each token */
+#define NUM_TOKENS 10            /* Initial number of tokens allocated;
+                                  * doesn't really matter */
+#define INIT_ARCHIVE_SIZE 10     /* Initial number of commands allocated in
+                                  * the archive; doesn't really matter */
 
 int task_count;
 int command_count;
@@ -83,7 +85,7 @@ char ** mysh_parse(char *command) {
         exit(1);
     }
     currtoken = tokens;
-    *currtoken = (char*)malloc(TOKEN_SIZE * sizeof(char));
+    *currtoken = (char*)malloc((TOKEN_SIZE + 1) * sizeof(char));
     tokencursor = *currtoken;
     
     /*Skip the beginning whitespaces, before handling*/
@@ -108,7 +110,7 @@ char ** mysh_parse(char *command) {
             else {
                 *tokencursor = *curr;   /* End current quoted one */
                 ++tokenlen;
-                if (tokenlen >= TOKEN_SIZE) {
+                if (tokenlen > TOKEN_SIZE) {
                     fprintf(stderr, "ERROR: TOKEN TOO LARGE");
                     return NULL;
                 }

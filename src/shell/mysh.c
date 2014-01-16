@@ -39,7 +39,7 @@
 #include <fcntl.h>
 #include "mysh.h"
 
-#define COMMAND_SIZE 512
+#define COMMAND_SIZE 511
 #define TOKEN_SIZE 64
 #define NUM_TOKENS 10
 #define INIT_ARCHIVE_SIZE 10
@@ -283,7 +283,7 @@ shell_command ** mysh_initcommand(char ** tokens) {
     char **currtoken, **arghead, **currarg;
     
     currtoken = tokens;
-    while (*currtoken != NULL) {
+    while (currtoken && *currtoken) {
         /* count number of commands */
         if (**currtoken != 0) {
             if (newcommand) {
@@ -308,6 +308,11 @@ shell_command ** mysh_initcommand(char ** tokens) {
                 ++currtoken;
             }
         }
+    }
+    if (newcommand && tokens && (*tokens)) {
+        fprintf(stderr, 
+        "SYNTAX_ERROR: expecting command around | character\n");
+        return NULL;
     }
     task_count = cmdcount;    
 
@@ -446,8 +451,8 @@ int mysh_exec(shell_command **tasks) {
         --taskremain;
         if (taskremain) {
             /* Create new pipe if there are tasks remaining */
-            if (pipe(currfd))
-                perror("ERROR");
+            if (pipe(currfd) < 0)
+                perror("pipe failure");
         }
         argv = (char **)malloc(((*currtask)->argc + 2) * sizeof(char*));
         if (!argv) {
@@ -462,14 +467,14 @@ int mysh_exec(shell_command **tasks) {
             if (!(*currtask)->argc) {
                 login = getlogin();
                 path = (char *)malloc((strlen(login) + \
-                        strlen("/home/")) * sizeof(char));
+                        strlen("/home/") + 1) * sizeof(char));
                 if (!path) {
                     fprintf(stderr, 
                     "ALLOC_FAILURE: Cannot allocate memory by malloc.\n");
                     exit(1);
                 }
-                strcpy(path, "/home/");
-                strcat(path, login);
+                strncpy(path, "/home/", 6);
+                strncat(path, login, strlen(login));
                 /* cd home if address not specified */
             }
             else {
@@ -483,29 +488,17 @@ int mysh_exec(shell_command **tasks) {
             argv[i+1] = strdup(((*currtask)->args)[i]);
         }
         argv[i+1] = NULL;
-        argv[0] = (char *)malloc((strlen(function)+5) * sizeof(char));
-        if (!(argv[0])) {
-            fprintf(stderr, 
-            "ALLOC_FAILURE: Cannot allocate memory by malloc.\n");
-            exit(1);
-        }
-        if (function && (*function != '/') && (*function != '.')) {
-            /* If the function doesn't specify a path, add 'bin' before it */
-            strcpy(argv[0], "/bin/");
-            strcat(argv[0], function);
-        }
-        else {  /* If the function specifies a path, use it directly */
-            strcpy(argv[0], function);
-        }
+        argv[0] = strdup(function);
+        free(function);
         childpid = fork();
         if (childpid == (pid_t)0){
             /* Set up redirections */
             if ((*currtask)->infile) {
                 in_fd = open((*currtask)->infile, O_RDONLY);
                 if (!in_fd)
-                    perror("ERROR");
+                    perror("cannot open input file");
                 if (dup2(in_fd, STDIN_FILENO))
-                    perror("ERROR");
+                    perror("cannot set up input redirection");
                 close(in_fd);
             }
             if ((*currtask)->outfile) {
@@ -518,41 +511,48 @@ int mysh_exec(shell_command **tasks) {
                              O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR);
                 }
                 if (!out_fd)
-                    perror("ERROR");
+                    perror("cannot open output file");
                 if (dup2(out_fd, STDOUT_FILENO) < 0)
-                    perror("ERROR");
+                    perror("cannot set up output redirection");
                 close(out_fd);
             }
             /* Set up piping if there is any */
             if (taskremain) {
                 if (dup2(currfd[1], STDOUT_FILENO) < 0)
-                    perror("ERROR");
+                    perror("cannot set up output pipeline");
                 close(currfd[0]);
                 close(currfd[1]);
             }
             if (haveprev) {
                 if (dup2(prevfd[0], STDIN_FILENO) < 0)
-                    perror("ERROR");
+                    perror("cannot set up input pipeline");
                 close(prevfd[1]);
                 close(prevfd[0]);
             }
-            execve(argv[0], &argv[0], NULL);
-            perror("ERROR");
+            execvp(argv[0], &argv[0]);
+            perror("execution error");
             exit(2);
         }
         else if (childpid < (pid_t) 0) {
-            perror("ERROR");
+            perror("fork failure");
             return -1;
         }
         else {
             if (taskremain) 
                 close(currfd[1]);
-            wait(&childpid);
+            if (waitpid(childpid, NULL, 0) < 0) {
+                perror("process failure");
+                return -1;
+            }
             if (haveprev) {
                 close(prevfd[0]);  
             }
             prevfd[0] = currfd[0];
             prevfd[1] = currfd[1];
+            for (i = 0; i < (*currtask)->argc + 1; i++) {
+                free(argv[i]);
+            }
+            free(argv);
         }
         ++currchild;
         ++currtask;
@@ -620,7 +620,7 @@ void mysh_free(char **tokens, shell_command **commands) {
 int main(void) {
     
     char *login, *cwd;
-    char command[COMMAND_SIZE];
+    char command[COMMAND_SIZE + 1];
     shell_command **tasks;
     char **tokens;
     int archive_volume, i;
@@ -639,33 +639,35 @@ int main(void) {
         }
         printf("%s:%s> ", login, cwd); /* print username and current path */
         if (fgets(command, COMMAND_SIZE, stdin) != NULL) {
-            if (((tokens = mysh_parse(command)) != NULL) && (*tokens)) {
-                /* If the command is !n, execute a history command */
-                if ((*tokens) && (**tokens == '!')) {
-                    if (*((*tokens) + 1)) {
-                        i = atoi((char*)(*tokens + 1));
-                        if ((i == 0) && ((*tokens)[1] != '0')) {
-                            /* character following ! is not a number */
+            if (*command == '!') {     /* Execute a history command */
+                if (command[1]) {
+                    i = atoi(&(command[1]));
+                    if ((i == 0) && (command[1] != '0')) {
+                        /* character following ! is not a number */
+                        fprintf(stderr, 
+                        "SYNTAX_ERROR: expecting integer after ! \n");
+                        mysh_free(tokens, tasks);
+                        tokens = NULL; /* Avoid following executions */
+                    }
+                    else {
+                        if (i > command_count) {
                             fprintf(stderr, 
-                            "SYNTAX_ERROR: expecting integer after ! \n");
-                            mysh_free(tokens, tasks);
+                        "SYNTAX_ERROR: integer out of archive range \n");
                             tokens = NULL; /* Avoid following executions */
                         }
                         else {
-                            mysh_free(tokens, tasks);
-                            if (i > command_count) {
-                                fprintf(stderr, 
-                            "SYNTAX_ERROR: integer out of archive range \n");
-                                tokens = NULL; /* Avoid following executions */
-                            }
-                            else {
-                                strcpy(command, command_archive[i]);
-                                printf("%s", command);
-                                tokens = mysh_parse(command);
-                            }
+                            strncpy(command, command_archive[i],
+                                  COMMAND_SIZE);
+                            printf("%s", command);
+                            tokens = mysh_parse(command);
                         }
                     }
                 }
+            }
+            else {
+                tokens = mysh_parse(command);
+            }
+            if ((tokens) && (*tokens)) {
                 if (tokens && (*tokens)) {
                     if (strcmp(*tokens, "exit") == 0) {
                         /* Exit shell */

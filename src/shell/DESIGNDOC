@@ -17,13 +17,26 @@ Taokun Zheng <tzheng@caltech.edu>
 
 >> What is the Git repository and commit hash for your submission?
 
-   Repository URL:  
-   commit ...
+   Repository URL: https://github.com/jchen2caltech/pintos-cz
+                   or
+           jchen2@login.cms.caltech.edu:/cs/courses/cs124/teams/pintos-cz
+
+   commit hash:   7aa5245443e72d7badff746a850df9eb1f243d97
+        
 
 ---- PRELIMINARIES ----
 
 >> If you have any preliminary comments on your submission, notes for the
 >> TAs, or extra credit, please give them here.
+
+
+    Two Extra-Credit features have been added to the shell:
+    1) ">>" instead of ">" redirection. This will redirect output to
+       append to an existing file rather than truncating it. 
+    2) "history" and "!n" command. The shell has a command archive that
+       stores previous commands since it's started. "history" command
+       will display all previous commands and their indices. "!n" will
+       re-execute the command at index <n> in history. 
 
 >> Please cite any offline or online sources you consulted while
 >> preparing your submission, other than the Pintos documentation, course

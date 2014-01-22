@@ -210,6 +210,44 @@ popa_ret:
 
 #### TODO:  YOU CAN PUT HELPER FUNCTIONS HERE IF YOU WISH.
 
+#### For reading sector. Sector number is set in %ebx, drive number in %dl.
+#### buffer segment
+read_sector:
+	pusha				# Pushing all registers on stack
+	mov $0x42, %ah			# Set up Extended Read
+	sub %ax, %ax			# Set %ax to 0 for LBA sector number
+	push %ax			# Push LBA sector number (8 bytes)
+	push %ax			# offset by two 2-byte 0s
+	push %ebx			# Push the final four bytes
+	push %es			# Push buffer segment
+	push %ax			# Push buffer offset
+	push $1				# Read one sector
+	push $16			# Size of DAP
+	mov %sp, %si			# Make DS:SI point at out DAP
+	int $0x13			# Call BIOS, error flag in CF
+	popa				# Restore all registers, flag preserved
+
+#### Error handling. %ax is set before calling this. %ax = 0, when drive not
+#### found or no bootable partition. %ax = 1, when sector read failed.
+error_handle:
+	test $0, %ax			# Check whether %ax is 0
+	jnz 1f				# not zero,
+					# jump to print sector failure
+	call puts			# else, print no_drive failure
+	.string "Kernel Partition not found"
+	jmp BIOS_call
+1:
+	call puts			# Print Sector read failure
+	.string "Sector Read Failure"
+
+BIOS_call:				# Call BIOS for the boot failed
+	int $0x18
+
+
+	
+	
+	
+	
 
 #### Command-line arguments and their count.
 #### This is written by the `pintos' utility and read by the kernel.

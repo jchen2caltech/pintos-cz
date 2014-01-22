@@ -47,7 +47,7 @@
 ####        If you want to create helper routines, there is a TODO toward
 ####        the end of this file that shows where they should go.
   
-  mov $0x79, %dl      # Start with Hard Drive A; set to 0x79 to compress code
+  mov $0x7F, %dl      # Start with Hard Drive A; set to 0x79 to compress code
   
 hard_disk_loop:
 
@@ -64,7 +64,7 @@ print_hdindex:
   call puts
   .string " hd"
   mov %dl, %al
-  sub $80, %al
+  sub $0x80, %al
   add $'a', %al
   call putc
   
@@ -85,7 +85,7 @@ check_partition:
   cmpw $510, %si      # If all 4 partitions have been checked
   je  hard_disk_loop  # go to the next hard drive
   
-  cmpb $80, %es:(%si) # Is the partition bootable?
+  cmpb $0x80, %es:(%si) # Is the partition bootable?
   jne check_partition
   
   cmpb $0x20, %es:4(%si)  # Is this partition kernel-type?
@@ -217,7 +217,6 @@ read_sector:
 
   pusha           # Pushing all registers on stack
 
-  mov $0x42, %ah  # Set up Extended Read
   
                   # Set up the DAP in the stack:
                   
@@ -230,6 +229,8 @@ read_sector:
   push $1         # Read one sector
   push $16        # Size of DAP
   mov %sp, %si    # Make DS:SI point at out DAP
+ 
+  mov $0x42, %ah  # Set up extended read
   int $0x13       # Call BIOS, error flag in CF
   popa            # Pop the DAP back
   

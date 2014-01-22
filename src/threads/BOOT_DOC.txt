@@ -19,7 +19,7 @@ Taokun Zheng <tzheng@caltech.edu>
 >> What is the Git repository and commit hash for your submission?
 
    Repository URL:  https://github.com/jchen2caltech/pintos-cz
-   commit           7c04c7831500f7b96ecb19683973c24922dc79c9
+   commit           06cf31281241a9a638782a775f9f5635fd6d9ded
 
 ---- PRELIMINARIES ----
 

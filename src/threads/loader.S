@@ -124,12 +124,14 @@ load_finish:
   .string "\r"
   
 drive_notfound:
-  xor %ax, %ax        # error code 0
-  call error_handle
+  call puts
+  .string "\rNo bootable drive\r"
+  int 0x18
   
 read_failure:
-  mov $1, %ax         # error code 1
-  call error_handle
+  call puts
+  .string "\rRead Failure\r"
+  int 0x18
 
 #### TODO:  LOADING CODE ENDS HERE!
 
@@ -233,22 +235,6 @@ read_sector:
   
   popa            # Pop previously-stored registers back
   ret
-
-#### Error handling. %ax is set before calling this. %ax = 0, when drive not
-#### found or no bootable partition. %ax = 1, when sector read failed.
-error_handle:
-  test $0, %ax      # Check error code
-  jnz error_read    # if error code is 1, then it's read failure
-  call puts         # else, print no_drive failure
-  .string "\rPartition not found\r"
-  jmp BIOS_call
-
-error_read:
-  call puts       # Print Sector read failure
-  .string "\rRead Failure\r"
-
-BIOS_call:        # Call BIOS for the boot failed
-  int $0x18
 
 #### Command-line arguments and their count.
 #### This is written by the `pintos' utility and read by the kernel.

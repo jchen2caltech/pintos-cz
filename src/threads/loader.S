@@ -232,7 +232,7 @@ read_sector:
   popa            # Pop the DAP back
   
   popa            # Pop previously-stored registers back
-  ert
+  ret
 
 #### Error handling. %ax is set before calling this. %ax = 0, when drive not
 #### found or no bootable partition. %ax = 1, when sector read failed.

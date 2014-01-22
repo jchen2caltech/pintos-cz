@@ -107,7 +107,7 @@ load_kernel_loop:
   call read_sector
   jc  read_failure
   
-  test $15, %bx       # print 1 progress indicator every 16 sectors
+  test $0xf, %bx       # print 1 progress indicator every 16 sectors
   jnz load_next
   call puts
   .string "."
@@ -122,6 +122,7 @@ load_finish:
   
   call puts
   .string "\r"
+  jmp boot_begin
   
 drive_notfound:
   call puts
@@ -145,6 +146,7 @@ read_failure:
 #### bytes in the loader, we reuse 4 bytes of the loader's code for
 #### this temporary pointer.
 
+boot_begin:
   mov $0x2000, %ax
   mov %ax, %es
   mov %es:0x18, %dx

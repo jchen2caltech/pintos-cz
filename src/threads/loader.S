@@ -53,7 +53,7 @@ hard_disk_loop:
 
   inc %dl           
   xor %ebx, %ebx      # Read partition table at sector 0
-  mov $2000, %ax      # Set up memory buffer
+  mov $0x2000, %ax      # Set up memory buffer
   mov %ax, %es
   
   call read_sector  
@@ -94,7 +94,7 @@ check_partition:
 load_kernel:
   
   mov %es:8(%si), %ebx  # first sector in partition
-  mov $2000, %ax        # buffer start address
+  mov $0x2000, %ax        # buffer start address
   
   mov %es:12(%si), %ecx # size of the partition
   cmp $1024, %ecx       # maximum set at 1024 sectors (512 kByte)

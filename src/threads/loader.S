@@ -240,12 +240,12 @@ error_handle:
   test $0, %ax      # Check error code
   jnz error_read    # if error code is 1, then it's read failure
   call puts         # else, print no_drive failure
-  .string "\rKernel Partition not found\r"
+  .string "\rPartition not found\r"
   jmp BIOS_call
 
 error_read:
   call puts       # Print Sector read failure
-  .string "\rSector Read Failure\r"
+  .string "\rRead Failure\r"
 
 BIOS_call:        # Call BIOS for the boot failed
   int $0x18

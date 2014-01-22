@@ -107,7 +107,7 @@ load_kernel_loop:
   call read_sector
   jc  read_failure
   
-  test $0xf, %bx       # print 1 progress indicator every 16 sectors
+  test $0x7, %bx       # print 1 progress indicator every 16 sectors
   jnz load_next
   call puts
   .string "."

@@ -8,9 +8,9 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Jianchi Chen <jchen2@caltech.edu>
+Taokun Zheng <tzheng@caltech.edu>
+
 
 >> Specify how many late tokens you are using on this assignment:  
 
@@ -18,7 +18,7 @@ FirstName LastName <email@domain.example>
 
 >> What is the Git repository and commit hash for your submission?
 
-   Repository URL:  
+   Repository URL:  https://github.com/jchen2caltech/pintos-cz
    commit ...
 
 ---- PRELIMINARIES ----
@@ -29,6 +29,9 @@ FirstName LastName <email@domain.example>
 >> Please cite any offline or online sources you consulted while
 >> preparing your submission, other than the Pintos documentation, course
 >> text, lecture notes, and course instructors.
+
+The wikipedia page on function int 0x13:
+http://en.wikipedia.org/wiki/INT_13H
 
 			     BOOTLOADER
 			     ==========
@@ -42,21 +45,73 @@ FirstName LastName <email@domain.example>
 >> anything like that; simply state the general purpose of the various
 >> memory areas used by your bootload code.
 
+The entire loader starts at 0x7c00, and my code (after the initialization)
+starts at 0x7c15. 
+The disk/partition checking process occupies 0x7c15 - 
+0x7c63, roughly 79 bytes. 
+The kernel loading loop and error handling occupy 0x7c64 - 0x7cbb, 
+roughly 87 bytes.
+The read_sector helper function goes from 0x7d1e to 0x7d33, about 21 bytes
+in size. 
+
 ---- ALGORITHMS ----
 
 >> A2: Write a pseudocode description (e.g. at the level of Python and
 >> English phrases) of the sequence of operations that your bootloader
 >> performs when searching for, and then loading, the Pintos kernel.
 
+Python Pseudocode:
+
+def loader():
+
+    hd_left = True
+    hd = 0x80
+
+    while hd_left:
+        memory_buff = 0x2000
+        curr_sector = 0
+        num_sector = 1
+        if not read_sector(curr_sector, num_sector, memory_buff, hd):
+            print "no bootable drive"
+            return
+        if (memory_buff.signature = MBR_sig):
+            for curr_part in range(446, 510, 16):
+            if curr_part.type == 0x20 and curr_part.status == 0x80:
+                hd_left = False
+        if hd_left:
+            hd += 1
+
+    for curr_sector in range(min(1024, curr_part.nsectors)):
+        if not read_sector(curr_sector, num_sector, memory_buff, hd):
+            print "read failure"
+            return
+        memory_buff += SECTOR_SIZE
+        
+    return
+    
+
 >> A3: Did you have any difficulties making the entire bootloader fit
 >> within the space allotted?  If so, what steps did you take to reduce
 >> the size of your bootstrap code?
+
+We had a little trouble with that, but easily fixed it. What we did was:
+1. Reduce the size of the error message string, for they were too long;
+2. Make error-handling two jumping branches instead of one function call;
+
+And it works well.
 
 ---- RATIONALE ----
 
 >> A4: Why did you choose your final implementation?  Did you encounter
 >> any major obstacles or difficulties that forced you to change your
 >> approach?  If so, describe the obstacles and how you overcame them.
+
+We chose our implementation because it was straight-forward. There is
+only one helper function which sets up the Disk-Access-Packet, so
+function call is minimized. I also put little loop tricks I learned in
+EE51 here and there to compress the code. We didn't encounter any major
+obstacles, with the only errors were that I forgot to write the "0x"
+in front of some of the hexadecimal numbers.
 
 			   SURVEY QUESTIONS
 			   ================

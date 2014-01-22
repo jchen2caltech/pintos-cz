@@ -46,12 +46,90 @@
 ####
 ####        If you want to create helper routines, there is a TODO toward
 ####        the end of this file that shows where they should go.
+  
+  mov $0x79, %dl      # Start with Hard Drive A; set to 0x79 to compress code
+  
+hard_disk_loop:
 
-	call puts
-	.string "\r\rTODO:  IMPLEMENT THE BOOTLOADER\r"
+  inc %dl           
+  xor %ebx, %ebx      # Read partition table at sector 0
+  mov $2000, %ax      # Set up memory buffer
+  mov %ax, %es
+  
+  call read_sector  
+  jc drive_notfound   # Error occured in 0x13
+  
+print_hdindex:
 
-	# Stop the processor.
-	hlt
+  call puts
+  .string " hd"
+  mov %dl, %al
+  sub $80, %al
+  add $'a', %al
+  call putc
+  
+check_signature:
+
+  cmpw $0xaa55, %es:510
+  jne hard_disk_loop
+  
+  mov $'0', %al       # Partition 1; trick to compress code
+  mov $430, %si       # Partition 1 entry; trick to compress code
+  
+check_partition:
+  
+  inc %al
+  call putc           # print the partition being checked
+
+  add $16, %si        # Increment partition
+  cmpw $510, %si      # If all 4 partitions have been checked
+  je  hard_disk_loop  # go to the next hard drive
+  
+  cmpb $80, %es:(%si) # Is the partition bootable?
+  jne check_partition
+  
+  cmpb $0x20, %es:4(%si)  # Is this partition kernel-type?
+  jne check_partition
+ 
+load_kernel:
+  
+  mov %es:8(%si), %ebx  # first sector in partition
+  mov $2000, %ax        # buffer start address
+  
+  mov %es:12(%si), %ecx # size of the partition
+  cmp $1024, %ecx       # maximum set at 1024 sectors (512 kByte)
+  jbe load_kernel_loop
+  mov $1024, %ecx
+  
+load_kernel_loop:
+
+  mov %ax, %es          # load address is es:00
+  call read_sector
+  jc  read_failure
+  
+  test $15, %bx       # print 1 progress indicator every 16 sectors
+  jnz load_next
+  call puts
+  .string "."
+  
+load_next:
+  
+  inc %bx             # next sector
+  add $32, %ax        # move buffer head (512 = 32 * 16) bytes forward
+  loop load_kernel_loop
+  
+load_finish:
+  
+  call puts
+  .string "\r"
+  
+drive_notfound:
+  xor %ax, %ax        # error code 0
+  call error_handle
+  
+read_failure:
+  mov $1, %ax         # error code 1
+  call error_handle
 
 #### TODO:  LOADING CODE ENDS HERE!
 

@@ -15,26 +15,26 @@
 #### this.
 
 # Runs in real mode, which is a 16-bit segment.
-	.code16
+  .code16
 
 # Set up segment registers.
 # Set stack to grow downward from 60 kB (after boot, the kernel
 # continues to use this stack for its initial thread).
 
-	sub %ax, %ax
-	mov %ax, %ds
-	mov %ax, %ss
-	mov $0xf000, %esp
+  sub %ax, %ax
+  mov %ax, %ds
+  mov %ax, %ss
+  mov $0xf000, %esp
 
 # Configure serial port so we can report progress without connected VGA.
 # See [IntrList] for details.
-	sub %dx, %dx			# Serial port 0.
-	mov $0xe3, %al			# 9600 bps, N-8-1.
-					# AH is already 0 (Initialize Port).
-	int $0x14			# Destroys AX.
+  sub %dx, %dx      # Serial port 0.
+  mov $0xe3, %al    # 9600 bps, N-8-1.
+          # AH is already 0 (Initialize Port).
+  int $0x14      # Destroys AX.
 
-	call puts
-	.string "PiLo"
+  call puts
+  .string "PiLo"
 
 #### TODO:  ITERATE THROUGH ALL HARD DISKS IN THE SYSTEM, LOOKING FOR A
 ####        BOOTABLE PINTOS PARTITION TO LOAD AND START.
@@ -103,7 +103,7 @@ load_kernel:
   
 load_kernel_loop:
 
-  mov %ax, %es          # load address is es:00
+  mov %ax, %es        # load address is es:00
   call read_sector
   jc  read_failure
   
@@ -143,12 +143,12 @@ read_failure:
 #### bytes in the loader, we reuse 4 bytes of the loader's code for
 #### this temporary pointer.
 
-	mov $0x2000, %ax
-	mov %ax, %es
-	mov %es:0x18, %dx
-	mov %dx, start
-	movw $0x2000, start + 2
-	ljmp *start
+  mov $0x2000, %ax
+  mov %ax, %es
+  mov %es:0x18, %dx
+  mov %dx, start
+  movw $0x2000, start + 2
+  ljmp *start
 
 #### The following label is a placeholder for the preceding code to use
 #### to set up for the jump to the Pintos kernel.  Of course, the start
@@ -164,18 +164,18 @@ start:
 #### just after the terminating null.  This subroutine preserves all
 #### general-purpose registers.
 
-puts:	xchg %si, %ss:(%esp)
-	push %ax
+puts:  xchg %si, %ss:(%esp)
+  push %ax
 next_char:
-	mov %cs:(%si), %al
-	inc %si
-	test %al, %al
-	jz 1f
-	call putc
-	jmp next_char
-1:	pop %ax
-	xchg %si, %ss:(%esp)
-	ret
+  mov %cs:(%si), %al
+  inc %si
+  test %al, %al
+  jz 1f
+  call putc
+  jmp next_char
+1:  pop %ax
+  xchg %si, %ss:(%esp)
+  ret
 
 #### Character output subroutine.  Prints the character in AL to the
 #### VGA display and serial port 0, using BIOS services (see
@@ -184,85 +184,86 @@ next_char:
 #### If called upon to output a carriage return, this subroutine
 #### automatically supplies the following line feed.
 
-putc:	pusha
+putc:  pusha
 
-1:	sub %bh, %bh			# Page 0.
-	mov $0x0e, %ah			# Teletype output service.
-	int $0x10
+1:  sub %bh, %bh      # Page 0.
+  mov $0x0e, %ah      # Teletype output service.
+  int $0x10
 
-	mov $0x01, %ah			# Serial port output service.
-	sub %dx, %dx			# Serial port 0.
-2:	int $0x14			# Destroys AH.
-	test $0x80, %ah			# Output timed out?
-	jz 3f
-	movw $0x9090, 2b		# Turn "int $0x14" above into NOPs.
+  mov $0x01, %ah      # Serial port output service.
+  sub %dx, %dx      # Serial port 0.
+2:  int $0x14       # Destroys AH.
+  test $0x80, %ah     # Output timed out?
+  jz 3f
+  movw $0x9090, 2b    # Turn "int $0x14" above into NOPs.
 
 3:
-	cmp $'\r', %al
-	jne popa_ret
-	mov $'\n', %al
-	jmp 1b
+  cmp $'\r', %al
+  jne popa_ret
+  mov $'\n', %al
+  jmp 1b
 
 popa_ret:
-	popa
-	ret				# Error code still in CF
+  popa
+  ret        # Error code still in CF
 
-
-#### TODO:  YOU CAN PUT HELPER FUNCTIONS HERE IF YOU WISH.
 
 #### For reading sector. Sector number is set in %ebx, drive number in %dl.
 #### buffer segment
+
 read_sector:
-	pusha				# Pushing all registers on stack
-	mov $0x42, %ah			# Set up Extended Read
-	sub %ax, %ax			# Set %ax to 0 for LBA sector number
-	push %ax			# Push LBA sector number (8 bytes)
-	push %ax			# offset by two 2-byte 0s
-	push %ebx			# Push the final four bytes
-	push %es			# Push buffer segment
-	push %ax			# Push buffer offset
-	push $1				# Read one sector
-	push $16			# Size of DAP
-	mov %sp, %si			# Make DS:SI point at out DAP
-	int $0x13			# Call BIOS, error flag in CF
-	popa				# Restore all registers, flag preserved
+
+  pusha           # Pushing all registers on stack
+
+  mov $0x42, %ah  # Set up Extended Read
+  
+                  # Set up the DAP in the stack:
+                  
+  sub %ax, %ax    # Set %ax to 0 for LBA sector number
+  push %ax        # Push LBA sector number (8 bytes)
+  push %ax        # offset by two 2-byte 0s
+  push %ebx       # Push the final four bytes
+  push %es        # Push buffer segment
+  push %ax        # Push buffer offset
+  push $1         # Read one sector
+  push $16        # Size of DAP
+  mov %sp, %si    # Make DS:SI point at out DAP
+  int $0x13       # Call BIOS, error flag in CF
+  popa            # Pop the DAP back
+  
+  popa            # Pop previously-stored registers back
+  ert
 
 #### Error handling. %ax is set before calling this. %ax = 0, when drive not
 #### found or no bootable partition. %ax = 1, when sector read failed.
 error_handle:
-	test $0, %ax			# Check whether %ax is 0
-	jnz 1f				# not zero,
-					# jump to print sector failure
-	call puts			# else, print no_drive failure
-	.string "Kernel Partition not found"
-	jmp BIOS_call
-1:
-	call puts			# Print Sector read failure
-	.string "Sector Read Failure"
+  test $0, %ax      # Check error code
+  jnz error_read    # if error code is 1, then it's read failure
+  call puts         # else, print no_drive failure
+  .string "\rKernel Partition not found\r"
+  jmp BIOS_call
 
-BIOS_call:				# Call BIOS for the boot failed
-	int $0x18
+error_read:
+  call puts       # Print Sector read failure
+  .string "\rSector Read Failure\r"
 
-
-	
-	
-	
-	
+BIOS_call:        # Call BIOS for the boot failed
+  int $0x18
 
 #### Command-line arguments and their count.
 #### This is written by the `pintos' utility and read by the kernel.
 #### The loader itself does not do anything with the command line.
-	.org LOADER_ARG_CNT - LOADER_BASE
-	.fill LOADER_ARG_CNT_LEN, 1, 0
+  .org LOADER_ARG_CNT - LOADER_BASE
+  .fill LOADER_ARG_CNT_LEN, 1, 0
 
-	.org LOADER_ARGS - LOADER_BASE
-	.fill LOADER_ARGS_LEN, 1, 0
+  .org LOADER_ARGS - LOADER_BASE
+  .fill LOADER_ARGS_LEN, 1, 0
 
 #### Partition table.
-	.org LOADER_PARTS - LOADER_BASE
-	.fill LOADER_PARTS_LEN, 1, 0
+  .org LOADER_PARTS - LOADER_BASE
+  .fill LOADER_PARTS_LEN, 1, 0
 
 #### Boot-sector signature for BIOS inspection.
-	.org LOADER_SIG - LOADER_BASE
-	.word 0xaa55
+  .org LOADER_SIG - LOADER_BASE
+  .word 0xaa55
 

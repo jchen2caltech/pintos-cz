@@ -148,6 +148,27 @@ read_sector:
 	mov %sp, %si			# Make DS:SI point at out DAP
 	int $0x13			# Call BIOS, error flag in CF
 	popa				# Restore all registers, flag preserved
+
+#### Error handling. %ax is set before calling this. %ax = 0, when drive not
+#### found or no bootable partition. %ax = 1, when sector read failed.
+error_handle:
+	test $0, %ax			# Check whether %ax is 0
+	jnz 1f				# not zero,
+					# jump to print sector failure
+	call puts			# else, print no_drive failure
+	.string "Kernel Partition not found"
+	jmp BIOS_call
+1:
+	call puts			# Print Sector read failure
+	.string "Sector Read Failure"
+
+BIOS_call:				# Call BIOS for the boot failed
+	int $0x18
+
+
+	
+	
+	
 	
 
 #### Command-line arguments and their count.

@@ -126,12 +126,12 @@ load_finish:
 drive_notfound:
   call puts
   .string "\rNo bootable drive\r"
-  int 0x18
+  int $0x18
   
 read_failure:
   call puts
   .string "\rRead Failure\r"
-  int 0x18
+  int $0x18
 
 #### TODO:  LOADING CODE ENDS HERE!
 

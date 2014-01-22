@@ -36,16 +36,6 @@
   call puts
   .string "PiLo"
 
-#### TODO:  ITERATE THROUGH ALL HARD DISKS IN THE SYSTEM, LOOKING FOR A
-####        BOOTABLE PINTOS PARTITION TO LOAD AND START.
-####
-####        Note that there are only ~300 bytes available for the entire
-####        Pintos bootloader, as Pintos commands are stored in the
-####        region immediately before the partition table in the sector.
-####        Sooo... be concise!
-####
-####        If you want to create helper routines, there is a TODO toward
-####        the end of this file that shows where they should go.
   
   mov $0x7F, %dl      # Start with Hard Drive A; set to 0x79 to compress code
   
@@ -133,8 +123,6 @@ read_failure:
   call puts
   .string "\rRead Failure\r"
   int $0x18
-
-#### TODO:  LOADING CODE ENDS HERE!
 
 #### Transfer control to the kernel that we loaded.  We read the start
 #### address out of the ELF header (see [ELF1]) and convert it from a

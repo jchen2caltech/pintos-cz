@@ -212,13 +212,14 @@ static void real_time_delay(int64_t num, int32_t denom) {
 
 static void wakeup(struct thread *cur_t, void *args) {
     if (cur_t->status == THREAD_BLOCKED){
-        if (cur_t->sleeptime > 0){
         /*If the current thread is blocked, then decrement its sleeptime*/
         --(cur_t->sleeptime);
-        if (cur_t->sleeptime == 0){
+        if (cur_t->sleeptime <= 0){
+            enum intr_level cur_intr = intr_disable();
+
             /*If sleeptime is 0, then unblock the thread*/
             thread_unblock(cur_t);
-        }
+            intr_set_level(cur_intr);
         }
     }
 }

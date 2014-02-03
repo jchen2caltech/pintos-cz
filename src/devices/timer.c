@@ -12,6 +12,7 @@
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
+
   
 #if TIMER_FREQ < 19
 #error 8254 timer requires TIMER_FREQ >= 19
@@ -26,6 +27,8 @@ static int64_t ticks;
 /*! Number of loops per timer tick.  Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
 
+static struct list sleeping_list;
+
 static intr_handler_func timer_interrupt;
 static bool too_many_loops(unsigned loops);
 static void busy_wait(int64_t loops);
@@ -37,6 +40,7 @@ static void real_time_delay(int64_t num, int32_t denom);
 void timer_init(void) {
     pit_configure_channel(0, 2, TIMER_FREQ);
     intr_register_ext(0x20, timer_interrupt, "8254 Timer");
+    list_init(&sleeping_list);
 }
 
 /*! Calibrates loops_per_tick, used to implement brief delays. */
@@ -78,14 +82,31 @@ int64_t timer_elapsed(int64_t then) {
     return timer_ticks() - then;
 }
 
+bool timer_threadcomp(const struct list_elem *a, 
+                      const struct list_elem *b, void *aux) {
+    struct thread *t1;
+    struct thread *t2;
+
+    t1 = list_entry(a, struct thread, elem);
+    t2 = list_entry(b, struct thread, elem);
+
+    return (t1->wakeup_time < t2->wakeup_time);
+}
+
 /*! Sleeps for approximately TICKS timer ticks.  Interrupts must
     be turned on. */
 void timer_sleep(int64_t ticks) {
-    int64_t start = timer_ticks();
+    int64_t wakeup_time = timer_ticks();
+    enum intr_level old_level;
+    struct thread *curr;
 
-    ASSERT(intr_get_level() == INTR_ON);
-    while (timer_elapsed(start) < ticks) 
-        thread_yield();
+    old_level = intr_disable();
+    wakeup_time += ticks;
+    curr = thread_current();
+    curr->wakeup_time = wakeup_time;
+    list_insert_ordered(&sleeping_list, &curr->elem, timer_threadcomp, NULL);
+    thread_block();
+    intr_set_level(old_level);
 }
 
 /*! Sleeps for approximately MS milliseconds.  Interrupts must be turned on. */
@@ -139,7 +160,24 @@ void timer_print_stats(void) {
 
 /*! Timer interrupt handler. */
 static void timer_interrupt(struct intr_frame *args UNUSED) {
+    struct thread *t;
+    
     ticks++;
+    if (!list_empty(&sleeping_list)) {
+        t = list_entry(list_front(&sleeping_list), struct thread, elem);
+        while (t && t->wakeup_time <= ticks) {
+            list_pop_front(&sleeping_list);
+            thread_unblock(t);
+            if (!list_empty(&sleeping_list)) {
+                t = list_entry(list_front(&sleeping_list), struct thread, 
+                               elem);
+            }
+            else {
+                t = NULL;
+            }
+        }
+    }
+
     thread_tick();
 }
 

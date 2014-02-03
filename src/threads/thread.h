@@ -104,6 +104,8 @@ struct thread {
     struct list_elem elem;              /*!< List element. */
     /**@}*/
 
+    int64_t wakeup_time;                /*!< Wake up time of the thread */
+
 #ifdef USERPROG
     /*! Owned by userprog/process.c. */
     /**@{*/

@@ -31,6 +31,7 @@ static bool too_many_loops(unsigned loops);
 static void busy_wait(int64_t loops);
 static void real_time_sleep(int64_t num, int32_t denom);
 static void real_time_delay(int64_t num, int32_t denom);
+static void wakeup(struct thread *t, void *args);
 
 /*! Sets up the timer to interrupt TIMER_FREQ times per second,
     and registers the corresponding interrupt. */
@@ -81,11 +82,14 @@ int64_t timer_elapsed(int64_t then) {
 /*! Sleeps for approximately TICKS timer ticks.  Interrupts must
     be turned on. */
 void timer_sleep(int64_t ticks) {
-    int64_t start = timer_ticks();
-
     ASSERT(intr_get_level() == INTR_ON);
-    while (timer_elapsed(start) < ticks) 
-        thread_yield();
+
+    /*Set up the sleeptime for the current thread*/
+    thread_current()->sleeptime = ticks;
+    /*Then block the thread while disabling interrupts*/
+    enum intr_level cur_intr = intr_disable();
+    thread_block();
+    intr_set_level(cur_intr);
 }
 
 /*! Sleeps for approximately MS milliseconds.  Interrupts must be turned on. */
@@ -141,6 +145,8 @@ void timer_print_stats(void) {
 static void timer_interrupt(struct intr_frame *args UNUSED) {
     ticks++;
     thread_tick();
+    /*Check threads that should be waken up*/
+    thread_foreach(wakeup, 0);
 }
 
 /*! Returns true if LOOPS iterations waits for more than one timer tick,
@@ -198,5 +204,22 @@ static void real_time_delay(int64_t num, int32_t denom) {
        the possibility of overflow. */
     ASSERT(denom % 1000 == 0);
     busy_wait(loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000)); 
+}
+
+/*! The wake-up function for each thread. Basically decrements the
+    sleeptime of blocked threads, and if the sleeptime is 0 then
+    the function unblocks the thread.*/
+
+static void wakeup(struct thread *cur_t, void *args) {
+    if (cur_t->status == THREAD_BLOCKED){
+        if (cur_t->sleeptime > 0){
+        /*If the current thread is blocked, then decrement its sleeptime*/
+        --(cur_t->sleeptime);
+        if (cur_t->sleeptime == 0){
+            /*If sleeptime is 0, then unblock the thread*/
+            thread_unblock(cur_t);
+        }
+        }
+    }
 }
 

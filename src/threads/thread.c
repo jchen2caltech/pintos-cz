@@ -186,7 +186,9 @@ tid_t thread_create(const char *name, int priority, thread_func *function,
 
     /* Add to run queue. */
     thread_unblock(t);
-
+    
+    if (priority > thread_get_priority())
+        thread_yield();
     return tid;
 }
 
@@ -300,12 +302,31 @@ void thread_foreach(thread_action_func *func, void *aux) {
 
 /*! Sets the current thread's priority to NEW_PRIORITY. */
 void thread_set_priority(int new_priority) {
+    struct thread *hp;
+    enum intr_level old_level;
+    int old_priority;
+    
+    ASSERT(new_priority <= PRI_MAX && new_priority >= PRI_MIN);
+    old_level = intr_disable();
+    old_priority = thread_get_priority();
     thread_current()->priority = new_priority;
+    thread_current()->donated_priority = PRI_MIN;
+    if (new_priority < old_priority && !list_empty(&ready_list)) {
+        hp = list_entry(list_max(&ready_list, thread_prioritycomp, NULL),
+                        struct thread, elem);
+        if (hp->priority > new_priority)
+            thread_yield();
+    }
+    intr_set_level(old_level);
 }
 
 /*! Returns the current thread's priority. */
 int thread_get_priority(void) {
-    return thread_current()->priority;
+    int p1, p2;
+
+    p1 = thread_current()->priority;
+    p2 = thread_current()->donated_priority;
+    return (p1 < p2 ? p2 : p1);
 }
 
 /*! Sets the current thread's nice value to NICE. */
@@ -402,6 +423,7 @@ static void init_thread(struct thread *t, const char *name, int priority) {
     strlcpy(t->name, name, sizeof t->name);
     t->stack = (uint8_t *) t + PGSIZE;
     t->priority = priority;
+    t->donated_priority = PRI_MIN;
     t->magic = THREAD_MAGIC;
 
     old_level = intr_disable();
@@ -425,10 +447,28 @@ static void * alloc_frame(struct thread *t, size_t size) {
     thread can continue running, then it will be in the run queue.)  If the
     run queue is empty, return idle_thread. */
 static struct thread * next_thread_to_run(void) {
-    if (list_empty(&ready_list))
-      return idle_thread;
-    else
-      return list_entry(list_pop_front(&ready_list), struct thread, elem);
+    struct thread * nt;
+    enum intr_level old_level;
+
+    if (list_empty(&ready_list)) {
+        return idle_thread;
+    }
+    else {
+        old_level = intr_disable();
+        nt = list_entry(list_max(&ready_list, thread_prioritycomp, NULL), 
+                        struct thread, elem);
+        if (!(&nt->elem)->prev) {
+            list_pop_front(&ready_list);
+        }
+        else if (!(&nt->elem)->next) {
+            list_pop_back(&ready_list);
+        }
+        else {
+            list_remove(&nt->elem);
+        }
+        intr_set_level(old_level);
+        return nt;
+    }
 }
 
 /*! Completes a thread switch by activating the new thread's page tables, and,
@@ -490,6 +530,30 @@ static void schedule(void) {
     if (cur != next)
         prev = switch_threads(cur, next);
     thread_schedule_tail(prev);
+}
+
+bool thread_prioritycomp(const struct list_elem *a, const struct list_elem *b,
+                         void *aux) {
+    enum intr_level old_level;
+    int p1, p2;
+    struct thread *t1, *t2;
+
+    old_level = intr_disable();
+    t1 = list_entry(a, struct thread, elem);
+    t2 = list_entry(b, struct thread, elem);
+    p1 = t1->priority;
+    if (p1 < t1->donated_priority) {
+        p1 = t1->donated_priority;
+    }
+
+    p2 = t2->priority;
+    if (p2 < t2->donated_priority) {
+        p2 = t2->donated_priority;
+    }
+    
+    intr_set_level(old_level);
+
+    return (p1 < p2);
 }
 
 /*! Returns a tid to use for a new thread. */

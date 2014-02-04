@@ -105,15 +105,29 @@ bool sema_try_down(struct semaphore *sema) {
     This function may be called from an interrupt handler. */
 void sema_up(struct semaphore *sema) {
     enum intr_level old_level;
+    struct thread *t;
 
     ASSERT(sema != NULL);
 
     old_level = intr_disable();
-    if (!list_empty(&sema->waiters)) {
-        thread_unblock(list_entry(list_pop_front(&sema->waiters),
-                                  struct thread, elem));
-    }
     sema->value++;
+    if (!list_empty(&sema->waiters)) {
+        t = list_entry(list_max(&sema->waiters, thread_prioritycomp, NULL),
+                       struct thread, elem);
+        if (!(&t->elem)->prev) {
+            list_pop_front(&sema->waiters);
+        }
+        else if (!(&t->elem)->next) {
+            list_pop_back(&sema->waiters);
+        }
+        else {
+            list_remove(&t->elem);
+        }
+        thread_unblock(t);
+        if (t->priority > thread_get_priority() ||
+            t->donated_priority > thread_get_priority())
+            thread_yield();
+    }
     intr_set_level(old_level);
 }
 
@@ -286,15 +300,44 @@ void cond_wait(struct condition *cond, struct lock *lock) {
     make sense to try to signal a condition variable within an
     interrupt handler. */
 void cond_signal(struct condition *cond, struct lock *lock UNUSED) {
+    struct list_elem *s; 
+
     ASSERT(cond != NULL);
     ASSERT(lock != NULL);
     ASSERT(!intr_context ());
     ASSERT(lock_held_by_current_thread (lock));
 
-    if (!list_empty(&cond->waiters)) 
-        sema_up(&list_entry(list_pop_front(&cond->waiters),
-                            struct semaphore_elem, elem)->semaphore);
+    if (!list_empty(&cond->waiters)) {
+        s = list_max(&cond->waiters, cond_prioritycomp, NULL);
+        if (!s->prev) {
+            list_pop_front(&cond->waiters);
+        }
+        else if (!s->next) {
+            list_pop_back(&cond->waiters);
+        }
+        else {
+            list_remove(s);
+        }
+        sema_up(&list_entry(s, struct semaphore_elem, elem)->semaphore);
+    }
 }
+
+bool cond_prioritycomp(const struct list_elem *a, const struct list_elem *b,
+                       void *aux) {
+    struct semaphore *s1, *s2;
+    struct list_elem *t1, *t2;
+
+    s1 = &list_entry(a, struct semaphore_elem, elem)->semaphore;
+    t1 = list_front(&s1->waiters);
+    
+    s2 = &list_entry(b, struct semaphore_elem, elem)->semaphore;
+    t2 = list_front(&s2->waiters);
+
+    return (thread_prioritycomp(t1, t2, NULL));
+
+}
+    
+    
 
 /*! Wakes up all threads, if any, waiting on COND (protected by
     LOCK).  LOCK must be held before calling this function.

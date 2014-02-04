@@ -12,6 +12,7 @@
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
+
   
 #if TIMER_FREQ < 19
 #error 8254 timer requires TIMER_FREQ >= 19
@@ -26,18 +27,20 @@ static int64_t ticks;
 /*! Number of loops per timer tick.  Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
 
+static struct list sleeping_list;
+
 static intr_handler_func timer_interrupt;
 static bool too_many_loops(unsigned loops);
 static void busy_wait(int64_t loops);
 static void real_time_sleep(int64_t num, int32_t denom);
 static void real_time_delay(int64_t num, int32_t denom);
-static void wakeup(struct thread *t, void *args);
 
 /*! Sets up the timer to interrupt TIMER_FREQ times per second,
     and registers the corresponding interrupt. */
 void timer_init(void) {
     pit_configure_channel(0, 2, TIMER_FREQ);
     intr_register_ext(0x20, timer_interrupt, "8254 Timer");
+    list_init(&sleeping_list);
 }
 
 /*! Calibrates loops_per_tick, used to implement brief delays. */
@@ -79,17 +82,31 @@ int64_t timer_elapsed(int64_t then) {
     return timer_ticks() - then;
 }
 
+bool timer_threadcomp(const struct list_elem *a, 
+                      const struct list_elem *b, void *aux) {
+    struct thread *t1;
+    struct thread *t2;
+
+    t1 = list_entry(a, struct thread, elem);
+    t2 = list_entry(b, struct thread, elem);
+
+    return (t1->wakeup_time < t2->wakeup_time);
+}
+
 /*! Sleeps for approximately TICKS timer ticks.  Interrupts must
     be turned on. */
 void timer_sleep(int64_t ticks) {
-    ASSERT(intr_get_level() == INTR_ON);
+    int64_t wakeup_time = timer_ticks();
+    enum intr_level old_level;
+    struct thread *curr;
 
-    /*Set up the sleeptime for the current thread*/
-    thread_current()->sleeptime = ticks;
-    /*Then block the thread while disabling interrupts*/
-    enum intr_level cur_intr = intr_disable();
+    old_level = intr_disable();
+    wakeup_time += ticks;
+    curr = thread_current();
+    curr->wakeup_time = wakeup_time;
+    list_insert_ordered(&sleeping_list, &curr->elem, timer_threadcomp, NULL);
     thread_block();
-    intr_set_level(cur_intr);
+    intr_set_level(old_level);
 }
 
 /*! Sleeps for approximately MS milliseconds.  Interrupts must be turned on. */
@@ -143,10 +160,25 @@ void timer_print_stats(void) {
 
 /*! Timer interrupt handler. */
 static void timer_interrupt(struct intr_frame *args UNUSED) {
+    struct thread *t;
+    
     ticks++;
+    if (!list_empty(&sleeping_list)) {
+        t = list_entry(list_front(&sleeping_list), struct thread, elem);
+        while (t && t->wakeup_time <= ticks) {
+            list_pop_front(&sleeping_list);
+            thread_unblock(t);
+            if (!list_empty(&sleeping_list)) {
+                t = list_entry(list_front(&sleeping_list), struct thread, 
+                               elem);
+            }
+            else {
+                t = NULL;
+            }
+        }
+    }
+
     thread_tick();
-    /*Check threads that should be waken up*/
-    thread_foreach(wakeup, 0);
 }
 
 /*! Returns true if LOOPS iterations waits for more than one timer tick,
@@ -204,23 +236,5 @@ static void real_time_delay(int64_t num, int32_t denom) {
        the possibility of overflow. */
     ASSERT(denom % 1000 == 0);
     busy_wait(loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000)); 
-}
-
-/*! The wake-up function for each thread. Basically decrements the
-    sleeptime of blocked threads, and if the sleeptime is 0 then
-    the function unblocks the thread.*/
-
-static void wakeup(struct thread *cur_t, void *args) {
-    if (cur_t->status == THREAD_BLOCKED){
-        /*If the current thread is blocked, then decrement its sleeptime*/
-        --(cur_t->sleeptime);
-        if (cur_t->sleeptime <= 0){
-            enum intr_level cur_intr = intr_disable();
-
-            /*If sleeptime is 0, then unblock the thread*/
-            thread_unblock(cur_t);
-            intr_set_level(cur_intr);
-        }
-    }
 }
 

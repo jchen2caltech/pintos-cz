@@ -97,13 +97,14 @@ struct thread {
     uint8_t *stack;                     /*!< Saved stack pointer. */
     int priority;                       /*!< Priority. */
     struct list_elem allelem;           /*!< List element for all threads list. */
-    int64_t sleeptime;                  /*!< Sleep time of this thread. */ 
     /**@}*/
 
     /*! Shared between thread.c and synch.c. */
     /**@{*/
     struct list_elem elem;              /*!< List element. */
     /**@}*/
+
+    int64_t wakeup_time;                /*!< Wake up time of the thread */
 
 #ifdef USERPROG
     /*! Owned by userprog/process.c. */

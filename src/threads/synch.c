@@ -182,6 +182,7 @@ void lock_init(struct lock *lock) {
 
     lock->holder = NULL;
     sema_init(&lock->semaphore, 1);
+    lock->priority = PRI_MIN;
 }
 
 /*! Acquires LOCK, sleeping until it becomes available if
@@ -193,13 +194,58 @@ void lock_init(struct lock *lock) {
     interrupts disabled, but interrupts will be turned back on if
     we need to sleep. */
 void lock_acquire(struct lock *lock) {
+    enum intr_level old_level;
+    struct thread *old_holder;
+
     ASSERT(lock != NULL);
     ASSERT(!intr_context());
     ASSERT(!lock_held_by_current_thread(lock));
 
+    old_level = intr_disable();
+    if (!thread_mlfqs) {
+        old_holder = lock->holder;
+        if (old_holder && lock->priority < thread_get_priority()) {
+            lock->priority = thread_get_priority();
+            if (old_holder->donated_priority < lock->priority) {
+                old_holder->donated_priority = lock->priority;
+            }
+        }
+    }
     sema_down(&lock->semaphore);
     lock->holder = thread_current();
+    list_push_back(&thread_current()->locks, &lock->elem);
+    if (!thread_mlfqs) {
+        lock_reset_priority(lock, 0);
+    }
+    intr_set_level(old_level);
 }
+
+void lock_reset_priority(struct lock *lock, int nest_level) {
+    struct thread *t;
+
+    ASSERT(lock != NULL);
+    if (list_empty(&(&lock->semaphore)->waiters)) {
+        lock->priority = PRI_MIN;
+    }
+    else {
+        t = list_entry(list_max(&(&lock->semaphore)->waiters, 
+                                 thread_prioritycomp, NULL), 
+                       struct thread, elem);
+        lock->priority = t->priority;
+        if (lock->priority > lock->holder->donated_priority)
+            lock->holder->donated_priority = lock->priority;
+    }
+} 
+
+bool lock_prioritycomp(const struct list_elem *a, const struct list_elem *b,
+                       void *aux) {
+    struct lock *l1, *l2;
+    
+    l1 = list_entry(a, struct lock, elem);
+    l2 = list_entry(b, struct lock, elem);
+
+    return (l1->priority < l2->priority);
+} 
 
 /*! Tries to acquires LOCK and returns true if successful or false
     on failure.  The lock must not already be held by the current
@@ -230,7 +276,20 @@ void lock_release(struct lock *lock) {
     ASSERT(lock_held_by_current_thread(lock));
 
     lock->holder = NULL;
+    if (list_empty(&(&lock->semaphore)->waiters))
+        lock->priority = PRI_MIN;
     sema_up(&lock->semaphore);
+    if (!(&lock->elem)->prev) {
+        list_pop_front(&thread_current()->locks);
+    }
+    else if (!(&lock->elem)->next) {
+        list_pop_back(&thread_current()->locks);
+    }
+    else {
+        list_remove(&lock->elem);
+    }
+    if (!thread_mlfqs)
+        thread_refund_priority();
 }
 
 /*! Returns true if the current thread holds LOCK, false

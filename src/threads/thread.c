@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/fixed-pt.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -70,6 +71,9 @@ static void schedule(void);
 void thread_schedule_tail(struct thread *prev);
 static tid_t allocate_tid(void);
 
+/*! The global load average of the system*/
+int64_t load_avg
+
 /*! Initializes the threading system by transforming the code
     that's currently running into a thread.  This can't work in
     general and it is possible in this case only because loader.S
@@ -87,6 +91,7 @@ void thread_init(void) {
     lock_init(&tid_lock);
     list_init(&ready_list);
     list_init(&all_list);
+    load_avg = 0;
 
     /* Set up a thread structure for the running thread. */
     initial_thread = running_thread();
@@ -331,25 +336,22 @@ int thread_get_priority(void) {
 
 /*! Sets the current thread's nice value to NICE. */
 void thread_set_nice(int nice UNUSED) {
-    /* Not yet implemented. */
+    thread_current()->nice = nice;
 }
 
 /*! Returns the current thread's nice value. */
 int thread_get_nice(void) {
-    /* Not yet implemented. */
-    return 0;
+    return thread_current()->nice;
 }
 
 /*! Returns 100 times the system load average. */
 int thread_get_load_avg(void) {
-    /* Not yet implemented. */
-    return 0;
+    return F2IN(FMULI(load_avg, 100));
 }
 
 /*! Returns 100 times the current thread's recent_cpu value. */
 int thread_get_recent_cpu(void) {
-    /* Not yet implemented. */
-    return 0;
+    return F2IN(FMULI(thread_current()->recent_cpu, 100));
 }
 
 /*! Idle thread.  Executes when no other thread is ready to run.

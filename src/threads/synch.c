@@ -114,15 +114,7 @@ void sema_up(struct semaphore *sema) {
     if (!list_empty(&sema->waiters)) {
         t = list_entry(list_max(&sema->waiters, thread_prioritycomp, NULL),
                        struct thread, elem);
-        if (!(&t->elem)->prev) {
-            list_pop_front(&sema->waiters);
-        }
-        else if (!(&t->elem)->next) {
-            list_pop_back(&sema->waiters);
-        }
-        else {
-            list_remove(&t->elem);
-        }
+        list_remove(&t->elem);
         thread_unblock(t);
         if (t->priority > thread_get_priority() ||
             t->donated_priority > thread_get_priority())
@@ -296,15 +288,7 @@ void lock_release(struct lock *lock) {
     if (!thread_mlfqs) {
         if (list_empty(&(&lock->semaphore)->waiters))
             lock->priority = PRI_MIN;
-        if (!(&lock->elem)->prev) {
-            list_pop_front(&thread_current()->locks);
-        }
-        else if (!(&lock->elem)->next) {
-            list_pop_back(&thread_current()->locks);
-        }
-        else {
-            list_remove(&lock->elem);
-        }
+        list_remove(&lock->elem);
         thread_refund_priority();
     }
     sema_up(&lock->semaphore);
@@ -387,15 +371,7 @@ void cond_signal(struct condition *cond, struct lock *lock UNUSED) {
 
     if (!list_empty(&cond->waiters)) {
         s = list_max(&cond->waiters, cond_prioritycomp, NULL);
-        if (!s->prev) {
-            list_pop_front(&cond->waiters);
-        }
-        else if (!s->next) {
-            list_pop_back(&cond->waiters);
-        }
-        else {
-            list_remove(s);
-        }
+        list_remove(s);
         sema_up(&list_entry(s, struct semaphore_elem, elem)->semaphore);
     }
 }

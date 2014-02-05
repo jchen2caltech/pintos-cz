@@ -565,15 +565,7 @@ static struct thread * next_thread_to_run(void) {
         old_level = intr_disable();
         nt = list_entry(list_max(&ready_list, thread_prioritycomp, NULL), 
                         struct thread, elem);
-        if (!(&nt->elem)->prev) {
-            list_pop_front(&ready_list);
-        }
-        else if (!(&nt->elem)->next) {
-            list_pop_back(&ready_list);
-        }
-        else {
-            list_remove(&nt->elem);
-        }
+        list_remove(&nt->elem);
         intr_set_level(old_level);
         return nt;
     }

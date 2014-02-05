@@ -334,9 +334,52 @@ int thread_get_priority(void) {
     return (p1 < p2 ? p2 : p1);
 }
 
+/*! Update the priority of the input thread. This is part of the BSD
+ *  Scheduler. */
+void thread_update_priority(struct thread* t){
+    int p;
+    
+    p = PRI_MAX - F2IN(FDIVI(t->recent_cpu, 4)) - (t->nice) * 2; 
+    /* Clamp the priority p if > PRI_MAX or < PEI_MIN*/
+    if (p > PRI_MAX)
+        p = PRI_MAX;
+    
+    if (p < PRI_MIN)
+        p = PRI_MIN;
+    
+    t->priority = p;
+    
+}
+
+/*! Update the global variable load_avg*/
+void update_load_avg(void) {
+    /* First get the number of ready threads*/
+    int64_t num_ready = list_size(&ready_list);
+    if (thread_current()!=idle_thread)
+        ++ num_ready;
+    
+    /*Update load_avg*/
+    load_avg = FMULF(load_avg, FDIVI(I2FZ(59), 60)) + FMULI(num_ready, 60);
+}
+
+/*! Update the recent_cpu of the input thread.*/
+void thread_update_recent_cpu(struct thread* t){
+    t->recent_cpu = FMULI(FDIVF(FMULI(load_avg, 2), 
+                          FADDI(FMULI(load_avg, 2)), 1), t->recent_cpu);
+    t->recent_cpu = FADDI(t->recent_cpu, t->nice);
+}
+
 /*! Sets the current thread's nice value to NICE. */
 void thread_set_nice(int nice UNUSED) {
+    int old_p;
+    
     thread_current()->nice = nice;
+    /*Update thread->priority accordingly*/
+    old_p = thread_current()->priority;
+    thread_update_priority(thread_current());
+    /*If the current thread's priority is lowered, then yield to scheduler*/
+    if (old_p > (thread_current()->priority))
+        thread_yield();
 }
 
 /*! Returns the current thread's nice value. */
@@ -427,6 +470,14 @@ static void init_thread(struct thread *t, const char *name, int priority) {
     t->priority = priority;
     t->donated_priority = PRI_MIN;
     t->magic = THREAD_MAGIC;
+    
+    /* Inherit nice and recent_cpu from the parent thread
+     * also update priority;*/
+    if (thread_mlfqs) {
+        t->nice = thread_current()->nice;
+        t->recent_cpu = thread_current()->recent_cpu;
+        thread_update_priority(t);
+    }
 
     old_level = intr_disable();
     list_push_back(&all_list, &t->allelem);

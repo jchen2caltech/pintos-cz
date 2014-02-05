@@ -355,6 +355,9 @@ void thread_set_priority(int new_priority) {
     intr_set_level(old_level);
 }
 
+/*! Update the priority of the lock that a thread is waiting on. 
+    This forms a nested call with lock_reset_priority() function, thus
+    there is a limit to the recursion depth. */
 void thread_update_locks(struct thread *t, int nest_level) {
     if (t->waiting_lock) {
         lock_reset_priority(t->waiting_lock, nest_level); 
@@ -527,11 +530,6 @@ static void init_thread(struct thread *t, const char *name, int priority) {
          t->priority = priority;
          t->donated_priority = PRI_MIN;
     }
-   /*
-   t->priority = priority;
-   t->nice = 0;
-   t->recent_cpu = 0;*/
-
     t->magic = THREAD_MAGIC;
     list_init(&t->locks); 
     t->waiting_lock = NULL; 
@@ -642,6 +640,10 @@ static void schedule(void) {
     thread_schedule_tail(prev);
 }
 
+/*! List_leff_func for priority scheduling. This function compares to list
+    elements that belong to two threads based on the threads' priority. 
+    Note that donated_priority is also taken into account. */
+
 bool thread_prioritycomp(const struct list_elem *a, const struct list_elem *b,
                          void *aux) {
     enum intr_level old_level;
@@ -666,6 +668,11 @@ bool thread_prioritycomp(const struct list_elem *a, const struct list_elem *b,
     return (p1 < p2);
 }
 
+/*! Reset the donated_priority of the thread. This function is called when
+    a lock has been released, and the original owner is thus forced to
+    refund the donated priority. It finds the new highest priority from
+    the locks that it now owns. */
+
 void thread_refund_priority(void) {
     struct lock *l;
     enum intr_level old_level;
@@ -681,12 +688,7 @@ void thread_refund_priority(void) {
                                 lock_prioritycomp, NULL),
                    struct lock, elem);
         ct->donated_priority = l->priority;
-    }/*
-    t = list_entry(list_max(&ready_list, thread_prioritycomp, NULL),
-                   struct thread, elem);
-    if (thread_get_priority() < t->priority ||
-        thread_get_priority() < t->donated_priority)
-        thread_yield();*/
+    }
     intr_set_level(old_level);
 }     
 

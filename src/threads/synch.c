@@ -217,12 +217,16 @@ void lock_acquire(struct lock *lock) {
     sema_down(&lock->semaphore);
     thread_current()->waiting_lock = NULL;
     lock->holder = thread_current();
-    list_push_back(&thread_current()->locks, &lock->elem);
     if (!thread_mlfqs) {
+        list_push_back(&thread_current()->locks, &lock->elem);
         lock_reset_priority(lock, 0);
     }
     intr_set_level(old_level);
 }
+
+/*! Reset the priority of a lock as well as the donated priority
+    of its holder. This is used when the lock has been updated,
+    or a priority change has happened to a thread waiting on the lock.*/
 
 void lock_reset_priority(struct lock *lock, int nest_level) {
     struct thread *t;
@@ -244,6 +248,8 @@ void lock_reset_priority(struct lock *lock, int nest_level) {
         }
     }
 } 
+
+/* list_less_func for lock priority comparison. */
 
 bool lock_prioritycomp(const struct list_elem *a, const struct list_elem *b,
                        void *aux) {
@@ -287,18 +293,20 @@ void lock_release(struct lock *lock) {
 
     old_level = intr_disable();
     lock->holder = NULL;
-    if (list_empty(&(&lock->semaphore)->waiters))
-        lock->priority = PRI_MIN;
-    if (!(&lock->elem)->prev) {
-        list_pop_front(&thread_current()->locks);
+    if (!thread_mlfqs) {
+        if (list_empty(&(&lock->semaphore)->waiters))
+            lock->priority = PRI_MIN;
+        if (!(&lock->elem)->prev) {
+            list_pop_front(&thread_current()->locks);
+        }
+        else if (!(&lock->elem)->next) {
+            list_pop_back(&thread_current()->locks);
+        }
+        else {
+            list_remove(&lock->elem);
+        }
+        thread_refund_priority();
     }
-    else if (!(&lock->elem)->next) {
-        list_pop_back(&thread_current()->locks);
-    }
-    else {
-        list_remove(&lock->elem);
-    }
-    thread_refund_priority();
     sema_up(&lock->semaphore);
     intr_set_level(old_level);
 }

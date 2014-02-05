@@ -97,8 +97,8 @@ struct thread {
     uint8_t *stack;                     /*!< Saved stack pointer. */
     int nice;                           /*!< Niceness of the thread.*/
     int32_t recent_cpu;                     /*!< Recent_cpu of the thread */
-    int priority;                       /*!< Priority. */
-    int donated_priority;
+    int priority;                       /*!< Intrinsic Priority. */
+    int donated_priority;               /*!< Priority donated by other threads.*/
     struct list_elem allelem;           /*!< List element for all threads list. */
     struct list_elem elem;              /*!< List element */
     /**@}*/

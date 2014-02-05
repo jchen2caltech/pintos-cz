@@ -100,11 +100,12 @@ struct thread {
     int priority;                       /*!< Priority. */
     int donated_priority;
     struct list_elem allelem;           /*!< List element for all threads list. */
+    struct list_elem elem;              /*!< List element */
     /**@}*/
 
     /*! Shared between thread.c and synch.c. */
     /**@{*/
-    struct list_elem elem;              /*!< List element. */
+    struct lock * waiting_lock;         /*!< The lock that the thread is waiting on. */
     /**@}*/
 
     int64_t wakeup_time;                /*!< Wake up time of the thread */

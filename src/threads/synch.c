@@ -204,14 +204,18 @@ void lock_acquire(struct lock *lock) {
     old_level = intr_disable();
     if (!thread_mlfqs) {
         old_holder = lock->holder;
+        if (old_holder)
+            thread_current()->waiting_lock = lock;
         if (old_holder && lock->priority < thread_get_priority()) {
             lock->priority = thread_get_priority();
             if (old_holder->donated_priority < lock->priority) {
                 old_holder->donated_priority = lock->priority;
+                thread_update_locks(old_holder, 0);
             }
         }
     }
     sema_down(&lock->semaphore);
+    thread_current()->waiting_lock = NULL;
     lock->holder = thread_current();
     list_push_back(&thread_current()->locks, &lock->elem);
     if (!thread_mlfqs) {
@@ -231,9 +235,13 @@ void lock_reset_priority(struct lock *lock, int nest_level) {
         t = list_entry(list_max(&(&lock->semaphore)->waiters, 
                                  thread_prioritycomp, NULL), 
                        struct thread, elem);
-        lock->priority = t->priority;
-        if (lock->priority > lock->holder->donated_priority)
+        lock->priority = (t->donated_priority > t->priority ?
+                          t->donated_priority : t->priority);
+        if (lock->priority > lock->holder->donated_priority) {
             lock->holder->donated_priority = lock->priority;
+            if (nest_level < 8)
+                thread_update_locks(lock->holder, nest_level + 1);
+        }
     }
 } 
 
@@ -272,13 +280,15 @@ bool lock_try_acquire(struct lock *lock) {
     make sense to try to release a lock within an interrupt
     handler. */
 void lock_release(struct lock *lock) {
+    enum intr_level old_level;
+
     ASSERT(lock != NULL);
     ASSERT(lock_held_by_current_thread(lock));
 
+    old_level = intr_disable();
     lock->holder = NULL;
     if (list_empty(&(&lock->semaphore)->waiters))
         lock->priority = PRI_MIN;
-    sema_up(&lock->semaphore);
     if (!(&lock->elem)->prev) {
         list_pop_front(&thread_current()->locks);
     }
@@ -288,8 +298,9 @@ void lock_release(struct lock *lock) {
     else {
         list_remove(&lock->elem);
     }
-    if (!thread_mlfqs)
-        thread_refund_priority();
+    thread_refund_priority();
+    sema_up(&lock->semaphore);
+    intr_set_level(old_level);
 }
 
 /*! Returns true if the current thread holds LOCK, false

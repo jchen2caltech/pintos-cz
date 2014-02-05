@@ -283,16 +283,20 @@ tid_t thread_tid(void) {
 /*! Deschedules the current thread and destroys it.  Never
     returns to the caller. */
 void thread_exit(void) {
+    struct thread *t;
+
     ASSERT(!intr_context());
 
 #ifdef USERPROG
     process_exit();
 #endif
 
+
     /* Remove thread from all threads list, set our status to dying,
        and schedule another process.  That process will destroy us
        when it calls thread_schedule_tail(). */
     intr_disable();
+    ASSERT(list_empty(&thread_current()->locks));
     list_remove(&thread_current()->allelem);
     thread_current()->status = THREAD_DYING;
     schedule();
@@ -351,16 +355,8 @@ void thread_set_priority(int new_priority) {
 }
 
 void thread_update_locks(struct thread *t, int nest_level) {
-    struct lock *l;
-    struct list_elem *e;
-    
-    if (!list_empty(&t->locks)) {
-        e = list_begin(&t->locks);
-        while (e->next) {
-            l = list_entry(e, struct lock, elem);
-            lock_reset_priority(l, nest_level);
-            e = e->next;
-        }
+    if (t->waiting_lock) {
+        lock_reset_priority(t->waiting_lock, nest_level); 
     }
 }
 
@@ -547,12 +543,13 @@ static void init_thread(struct thread *t, const char *name, int priority) {
          t->priority = priority;
          t->donated_priority = PRI_MIN;
     }*/
-   t->priority = priority;
-   t->nice = 0;
-   t->recent_cpu = 0;
+    t->priority = priority;
+    t->nice = 0;
+    t->recent_cpu = 0;
 
     t->magic = THREAD_MAGIC;
-    list_init(&t->locks);  
+    list_init(&t->locks); 
+    t->waiting_lock = NULL; 
 
     old_level = intr_disable();
     list_push_back(&all_list, &t->allelem);
@@ -686,24 +683,25 @@ bool thread_prioritycomp(const struct list_elem *a, const struct list_elem *b,
 
 void thread_refund_priority(void) {
     struct lock *l;
-    struct thread *t;
     enum intr_level old_level;
+    struct thread *ct;
 
     old_level = intr_disable();
-    if (list_empty(&thread_current()->locks)) {
-        thread_current()->donated_priority = PRI_MIN;
+    ct = thread_current();
+    if (list_empty(&ct->locks)) {
+        ct->donated_priority = PRI_MIN;
     }
     else {
-        l = list_entry(list_max(&thread_current()->locks, 
-                                lock_prioritycomp,NULL),
+        l = list_entry(list_max(&ct->locks, 
+                                lock_prioritycomp, NULL),
                    struct lock, elem);
-        thread_current()->donated_priority = l->priority;
-    }
+        ct->donated_priority = l->priority;
+    }/*
     t = list_entry(list_max(&ready_list, thread_prioritycomp, NULL),
                    struct thread, elem);
     if (thread_get_priority() < t->priority ||
         thread_get_priority() < t->donated_priority)
-        thread_yield();
+        thread_yield();*/
     intr_set_level(old_level);
 }     
 

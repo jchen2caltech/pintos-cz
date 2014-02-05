@@ -12,6 +12,7 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "threads/fixed-pt.h"
+#include "devices/timer.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -72,7 +73,7 @@ void thread_schedule_tail(struct thread *prev);
 static tid_t allocate_tid(void);
 
 /*! The global load average of the system*/
-int64_t load_avg
+int64_t load_avg;
 
 /*! Initializes the threading system by transforming the code
     that's currently running into a thread.  This can't work in
@@ -121,14 +122,52 @@ void thread_tick(void) {
     struct thread *t = thread_current();
 
     /* Update statistics. */
-    if (t == idle_thread)
+    if (t == idle_thread){
         idle_ticks++;
+        t->recent_cpu = FADDI(t->recent_cpu, 1);
+    }
 #ifdef USERPROG
-    else if (t->pagedir != NULL)
+    else if (t->pagedir != NULL){
         user_ticks++;
+        t->recent_cpu = FADDI(t->recent_cpu, 1);
+    }
 #endif
-    else
+    else {
         kernel_ticks++;
+        t->recent_cpu = FADDI(t->recent_cpu, 1);
+    }
+    
+    if (thread_mlfqs){
+        if (timer_ticks() % TIMER_FREQ == 0){
+            /* When time passed as multiple of a second, then update
+            * load_avg and all thread's recent_cpu.*/
+            update_load_avg();
+        
+            struct list_elem *lst;
+            for (lst = list_begin(&all_list); lst != list_end(&all_list); 
+                lst = list_next(lst)) 
+                    thread_update_recent_cpu(
+                        list_entry(lst, struct thread, allelem));
+            
+        }
+        
+        if (timer_ticks() % 4 == 0){
+            /*For every fourth clock tick, update all priority.*/
+            struct list_elem *lst;
+            struct thread* cur_t;
+            for (lst = list_begin(&all_list); lst != list_end(&all_list); 
+                lst = list_next(lst)) {
+                
+                cur_t = list_entry(lst, struct thread, allelem);
+                if (cur_t != idle_thread)
+                    thread_update_priority(cur_t);
+            }
+            
+        }
+        
+    }
+    
+    
 
     /* Enforce preemption. */
     if (++thread_ticks >= TIME_SLICE)
@@ -354,18 +393,34 @@ void thread_update_priority(struct thread* t){
 /*! Update the global variable load_avg*/
 void update_load_avg(void) {
     /* First get the number of ready threads*/
-    int64_t num_ready = list_size(&ready_list);
+    int64_t num_ready = 0;
+    struct list_elem* lst;
     if (thread_current()!=idle_thread)
-        ++ num_ready;
+        num_ready = FADDI(num_ready, 1);
+    for (lst = list_begin(&ready_list); lst != list_end(&ready_list); 
+         lst = list_next(lst)) {
+           if (list_entry(lst, struct thread, allelem) != idle_thread)
+               num_ready = FADDI(num_ready, 1);
+     }
+    
+
+    //printf("list size should be %d\n", list_size(&ready_list));
+    //printf("num_ready is %d\n", F2IN(num_ready));
+    
+    //printf("load_avg was %d\n", F2IN(load_avg));
     
     /*Update load_avg*/
-    load_avg = FMULF(load_avg, FDIVI(I2FZ(59), 60)) + FMULI(num_ready, 60);
+    load_avg = FMULF(load_avg, FDIVI(I2F(59), 60)) 
+               + FDIVI(num_ready, 60);
+    //printf("load_avg become %d\n", F2IN(load_avg));
+    //printf("--------\n");
+    
 }
 
 /*! Update the recent_cpu of the input thread.*/
 void thread_update_recent_cpu(struct thread* t){
     t->recent_cpu = FMULI(FDIVF(FMULI(load_avg, 2), 
-                          FADDI(FMULI(load_avg, 2)), 1), t->recent_cpu);
+                          FADDI(FMULI(load_avg, 2), 1)), t->recent_cpu);
     t->recent_cpu = FADDI(t->recent_cpu, t->nice);
 }
 
@@ -467,17 +522,26 @@ static void init_thread(struct thread *t, const char *name, int priority) {
     t->status = THREAD_BLOCKED;
     strlcpy(t->name, name, sizeof t->name);
     t->stack = (uint8_t *) t + PGSIZE;
-    t->priority = priority;
-    t->donated_priority = PRI_MIN;
+    
+   /* Set Up priority according to the algorithm;*/
+    if (thread_mlfqs) {
+        if (t == initial_thread){
+            t->nice = 0;
+            t->recent_cpu = 0;
+        } else {
+            t->nice = thread_current()->nice;
+            t->recent_cpu = thread_current()->recent_cpu;   
+        }
+        thread_update_priority(t);
+        
+    } else {
+         t->priority = priority;
+         t->donated_priority = PRI_MIN;
+    }
+    
     t->magic = THREAD_MAGIC;
     
-    /* Inherit nice and recent_cpu from the parent thread
-     * also update priority;*/
-    if (thread_mlfqs) {
-        t->nice = thread_current()->nice;
-        t->recent_cpu = thread_current()->recent_cpu;
-        thread_update_priority(t);
-    }
+    
 
     old_level = intr_disable();
     list_push_back(&all_list, &t->allelem);

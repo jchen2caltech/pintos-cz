@@ -107,6 +107,8 @@ struct thread {
 
     int64_t wakeup_time;                /*!< Wake up time of the thread */
 
+    struct list locks;                  /*!< List of locks acquired by the thread */
+
 #ifdef USERPROG
     /*! Owned by userprog/process.c. */
     /**@{*/
@@ -146,6 +148,9 @@ void thread_yield(void);
 
 bool thread_prioritycomp(const struct list_elem *a, const struct list_elem *b, 
                          void *aux);
+
+void thread_refund_priority(void);
+void thread_update_locks(struct thread *t, int nest_level);
 
 /*! Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func(struct thread *t, void *aux);

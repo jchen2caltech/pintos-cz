@@ -11,6 +11,8 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/fixed-pt.h"
+#include "devices/timer.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -70,6 +72,9 @@ static void schedule(void);
 void thread_schedule_tail(struct thread *prev);
 static tid_t allocate_tid(void);
 
+/*! The global load average of the system*/
+int64_t load_avg;
+
 /*! Initializes the threading system by transforming the code
     that's currently running into a thread.  This can't work in
     general and it is possible in this case only because loader.S
@@ -87,6 +92,7 @@ void thread_init(void) {
     lock_init(&tid_lock);
     list_init(&ready_list);
     list_init(&all_list);
+    load_avg = 0;
 
     /* Set up a thread structure for the running thread. */
     initial_thread = running_thread();
@@ -116,14 +122,52 @@ void thread_tick(void) {
     struct thread *t = thread_current();
 
     /* Update statistics. */
-    if (t == idle_thread)
+    if (t == idle_thread){
         idle_ticks++;
+        t->recent_cpu = FADDI(t->recent_cpu, 1);
+    }
 #ifdef USERPROG
-    else if (t->pagedir != NULL)
+    else if (t->pagedir != NULL){
         user_ticks++;
+        t->recent_cpu = FADDI(t->recent_cpu, 1);
+    }
 #endif
-    else
+    else {
         kernel_ticks++;
+        t->recent_cpu = FADDI(t->recent_cpu, 1);
+    }
+    
+    if (thread_mlfqs){
+        if (timer_ticks() % TIMER_FREQ == 0){
+            /* When time passed as multiple of a second, then update
+            * load_avg and all thread's recent_cpu.*/
+            update_load_avg();
+        
+            struct list_elem *lst;
+            for (lst = list_begin(&all_list); lst != list_end(&all_list); 
+                lst = list_next(lst)) 
+                    thread_update_recent_cpu(
+                        list_entry(lst, struct thread, allelem));
+            
+        }
+        
+        if (timer_ticks() % 4 == 0){
+            /*For every fourth clock tick, update all priority.*/
+            struct list_elem *lst;
+            struct thread* cur_t;
+            for (lst = list_begin(&all_list); lst != list_end(&all_list); 
+                lst = list_next(lst)) {
+                
+                cur_t = list_entry(lst, struct thread, allelem);
+                if (cur_t != idle_thread)
+                    thread_update_priority(cur_t);
+            }
+            
+        }
+        
+    }
+    
+    
 
     /* Enforce preemption. */
     if (++thread_ticks >= TIME_SLICE)
@@ -344,27 +388,83 @@ int thread_get_priority(void) {
     return (p1 < p2 ? p2 : p1);
 }
 
+/*! Update the priority of the input thread. This is part of the BSD
+ *  Scheduler. */
+void thread_update_priority(struct thread* t){
+    int p;
+    
+    p = PRI_MAX - F2IN(FDIVI(t->recent_cpu, 4)) - (t->nice) * 2; 
+    /* Clamp the priority p if > PRI_MAX or < PEI_MIN*/
+    if (p > PRI_MAX)
+        p = PRI_MAX;
+    
+    if (p < PRI_MIN)
+        p = PRI_MIN;
+    
+    t->priority = p;
+    
+}
+
+/*! Update the global variable load_avg*/
+void update_load_avg(void) {
+    /* First get the number of ready threads*/
+    int64_t num_ready = 0;
+    struct list_elem* lst;
+    if (thread_current()!=idle_thread)
+        num_ready = FADDI(num_ready, 1);
+    for (lst = list_begin(&ready_list); lst != list_end(&ready_list); 
+         lst = list_next(lst)) {
+           if (list_entry(lst, struct thread, allelem) != idle_thread)
+               num_ready = FADDI(num_ready, 1);
+     }
+    
+
+    //printf("list size should be %d\n", list_size(&ready_list));
+    //printf("num_ready is %d\n", F2IN(num_ready));
+    
+    //printf("load_avg was %d\n", F2IN(load_avg));
+    
+    /*Update load_avg*/
+    load_avg = FMULF(load_avg, FDIVI(I2F(59), 60)) 
+               + FDIVI(num_ready, 60);
+    //printf("load_avg become %d\n", F2IN(load_avg));
+    //printf("--------\n");
+    
+}
+
+/*! Update the recent_cpu of the input thread.*/
+void thread_update_recent_cpu(struct thread* t){
+    t->recent_cpu = FMULI(FDIVF(FMULI(load_avg, 2), 
+                          FADDI(FMULI(load_avg, 2), 1)), t->recent_cpu);
+    t->recent_cpu = FADDI(t->recent_cpu, t->nice);
+}
+
 /*! Sets the current thread's nice value to NICE. */
 void thread_set_nice(int nice UNUSED) {
-    /* Not yet implemented. */
+    int old_p;
+    
+    thread_current()->nice = nice;
+    /*Update thread->priority accordingly*/
+    old_p = thread_current()->priority;
+    thread_update_priority(thread_current());
+    /*If the current thread's priority is lowered, then yield to scheduler*/
+    if (old_p > (thread_current()->priority))
+        thread_yield();
 }
 
 /*! Returns the current thread's nice value. */
 int thread_get_nice(void) {
-    /* Not yet implemented. */
-    return 0;
+    return thread_current()->nice;
 }
 
 /*! Returns 100 times the system load average. */
 int thread_get_load_avg(void) {
-    /* Not yet implemented. */
-    return 0;
+    return F2IN(FMULI(load_avg, 100));
 }
 
 /*! Returns 100 times the current thread's recent_cpu value. */
 int thread_get_recent_cpu(void) {
-    /* Not yet implemented. */
-    return 0;
+    return F2IN(FMULI(thread_current()->recent_cpu, 100));
 }
 
 /*! Idle thread.  Executes when no other thread is ready to run.
@@ -437,10 +537,25 @@ static void init_thread(struct thread *t, const char *name, int priority) {
     t->status = THREAD_BLOCKED;
     strlcpy(t->name, name, sizeof t->name);
     t->stack = (uint8_t *) t + PGSIZE;
-    t->priority = priority;
-    t->donated_priority = PRI_MIN;
+    
+   /* Set Up priority according to the algorithm;*/
+    if (thread_mlfqs) {
+        if (t == initial_thread){
+            t->nice = 0;
+            t->recent_cpu = 0;
+        } else {
+            t->nice = thread_current()->nice;
+            t->recent_cpu = thread_current()->recent_cpu;   
+        }
+        thread_update_priority(t);
+        
+    } else {
+         t->priority = priority;
+         t->donated_priority = PRI_MIN;
+    }
+    
     t->magic = THREAD_MAGIC;
-    list_init(&t->locks);
+    list_init(&t->locks);  
 
     old_level = intr_disable();
     list_push_back(&all_list, &t->allelem);

@@ -95,6 +95,8 @@ struct thread {
     enum thread_status status;          /*!< Thread state. */
     char name[16];                      /*!< Name (for debugging purposes). */
     uint8_t *stack;                     /*!< Saved stack pointer. */
+    int nice;                           /*!< Niceness of the thread.*/
+    int64_t recent_cpu;                     /*!< Recent_cpu of the thread */
     int priority;                       /*!< Priority. */
     int donated_priority;
     struct list_elem allelem;           /*!< List element for all threads list. */
@@ -164,6 +166,11 @@ int thread_get_nice(void);
 void thread_set_nice(int);
 int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
+void thread_update_recent_cpu(struct thread* t);
+void update_load_avg(void);
+void thread_update_priority(struct thread* t);
+
+
 
 #endif /* threads/thread.h */
 

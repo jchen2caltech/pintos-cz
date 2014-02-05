@@ -7,7 +7,7 @@
 
 /*! Convert input n to a fixed-point*/
 #define I2F(n) (n * FLT)
-)
+
 /*! Convert input fixed-put to an integer, round towards 0.*/
 #define F2IZ(x) (x / FLT)
 

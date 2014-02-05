@@ -6,13 +6,13 @@
 #define FLT 16384
 
 /*! Convert input n to a fixed-point*/
-#define I2F(n) (n * FLT)
+#define I2F(n) (int64_t)(n * FLT)
 
 /*! Convert input fixed-put to an integer, round towards 0.*/
-#define F2IZ(x) (x / FLT)
+#define F2IZ(x) (int)(x / FLT)
 
 /*! Convert input fixed-put to an integer, round to nearest.*/
-#define F2IN(x) ((x <= 0) ? ((x - FLT / 2) / FLT) : (( x + FLT / 2) / FLT))
+#define F2IN(x) (int)((x <= 0) ? ((x - FLT / 2) / FLT) : (( x + FLT / 2) / FLT))
 
 /*! Add a float and an int, note fixed-pt is the first argument, and int is
  *  the second */

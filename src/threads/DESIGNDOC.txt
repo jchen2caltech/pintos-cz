@@ -238,11 +238,25 @@ void thread_set_priority(int new_priority) {
     intr_set_level(old_level);
 }
 
+One potential race would be if the thread is preempted after it's performed
+the if (!list_empty(&ready_list)) check, and the other threads are blocked
+since the preemption, list_max will fail the assertion and error will occur.
+
+Using a lock on the ready_list is not a good idea. Because it will simply stop
+the schedule() from functioning. 
 
 ---- RATIONALE ----
 
 >> B7: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+We originally considered using direct priority donation from thread to thread
+without going through lock. However, this turns out to be a lot more
+complicated since it is possible that multiple threads are waiting on a same
+lock, and keeping track of just the lock instead of all the threads will
+be much simpler. It also makes priority refunding and nest priority donation
+pretty easy because threads and locks keep track of each other, instead
+of a complicated network of threads keeping track of other threads. 
 
 			  ADVANCED SCHEDULER
 			  ==================

@@ -17,7 +17,7 @@
 >> What is the Git repository and commit hash for your submission?
 
    Repository URL:  https://github.com/jchen2calteh/pintos-cz
-   commit
+   commit           bfa325478319049cbe3f1115a4e618abc866edf9
 
 ---- PRELIMINARIES ----
 
@@ -37,26 +37,75 @@
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+I've declared one additional static variable, being:
+
+static struct list sleeping_list;
+
+This list keeps record of all the threads sleeping on the clock now. 
+
+Also, an additional field is added to the struct thread definition:
+
+struct thread {
+    ...
+    int64_t wakeup_time;                /*!< Wake up time of the thread */
+    ...
+};
+
+wakeup_time records the set wakeup time for a sleeping thread.
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe what happens in a call to timer_sleep(),
 >> including the effects of the timer interrupt handler.
 
+When timer_sleep is called, the wakeup_time is first calculated using
+the current time and the time span that the thread is supposed to sleep
+for. And then the wakeup_time of the current thread will be set accordingly,
+and then the current thread will be inserted (sorted sense) to the sorted
+list of sleeping_list. And then the thread is blocked. 
+
+When the timer interrupt handler is called, it checked for the first
+thread in the sleeping list to see if the current time exceeds its 
+wakeup_time. If it does, then the handler will unblock the thread, and 
+check for the next. Since the list is sorted by wakeup_time, the handler
+can stop when it reaches a thread that has wakeup_time greater than
+current time. 
+
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
+
+The sleeping_list is sorted at the time of the thread insertion, so the
+interrupt handler only needs to check for threads to be woken up at the
+front of the sleeping_list. This greatly reduces the time spent on handler
+compared to the method where the list is unsorted and the handler needs
+to traverse the whole list to check for wakeup threads. 
 
 ---- SYNCHRONIZATION ----
 
 >> A4: How are race conditions avoided when multiple threads call
 >> timer_sleep() simultaneously?
 
+During the timer_sleep execution, the interrupt is disabled when executing
+list_insert_ordered and thread_block to ensure atomic operation of the two
+lines. Therefore, race condition will not happen when multiple threads call
+timer_sleep(), because modification of the list and thread_block always happen
+at the same time. 
+
 >> A5: How are race conditions avoided when a timer interrupt occurs
 >> during a call to timer_sleep()?
+
+As said in A4, the operation of list_insert and thread_block is atomic, so
+timer_interrupt will not occur in between. Thus race condition is avoided.
 
 ---- RATIONALE ----
 
 >> A6: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+This design is fast, because I determined that call to timer_sleep will be 
+a lot rarer than call to timer_interrupt, thus sacrificing a little time
+on list_insert_ordered for the minimal time in the handler checking is
+worth it. 
 
 			 PRIORITY SCHEDULING
 			 ===================
@@ -67,20 +116,103 @@
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+Three new fields are added to the struct thread definition, namely:
+
+1. int donated_priority:
+This is used to keep track of priority donated by other
+threads because of locks this thread is holding. 
+
+2. struct list locks:
+This keeps track of all the locks that the thread is currently holding. 
+It is useful when one of the locks is released, and the donated_priority
+needs to be recalculated.
+
+3. struct lock * waiting_lock:
+This records the lock that the thread is currently waiting on (if any).
+It is useful when the priority of this thread is changed, and thus the
+priority donation FROM this thread needs to be recalculated.
+
+Two new fields are added to the struct lock definition, namely:
+
+1. struct list_elem elem:
+This field is added so that lock can be enlisted in the "locks" field in
+the thread. 
+
+2. int priority:
+This field keeps track of the highest priority of the waiting threads,
+so that priority donation can be easier. 
+
 >> B2: Explain the data structure used to track priority donation.
 >> Use ASCII art to diagram a nested donation.  (Alternately, submit a
 >> .png file.)
+
+As shown above, each lock keeps track of its own "priority" based on the
+waiting threads. Each thread keeps track of the locks it owns, as well
+as the lock that it is waiting on. Thus, when a lock_acquire or lock_release
+occurs, everything associated will be updated through two functions, namely
+lock_reset_priority() and thread_update_locks(). 
+
+See the attached png file for diagram illustration. 
 
 ---- ALGORITHMS ----
 
 >> B3: How do you ensure that the highest priority thread waiting for
 >> a lock, semaphore, or condition variable wakes up first?
 
+This is ensured by using list_max instead of list_pop_front when looking for
+the next thread to run or unblock. The standard for list_max is defined in
+thread_prioritycomp() function, which compares two list elements of two
+threads based on the threads' priority (with donate_priority taken into
+account). 
+
 >> B4: Describe the sequence of events when a call to lock_acquire()
 >> causes a priority donation.  How is nested donation handled?
 
+1. When lock_acquire is called, it is first checked if the lock 
+(call it lock1) already has a holder. If it does, lock1 is 
+also set as the waiting_lock of the current thread. 
+
+2. It is then checked if current thread's priority
+(with donated priority taken into account) is greater than lock1's
+priority. If it does, lock1's priority is then updated.
+
+3. Then it is checked if lock1's priority is greater than the old
+holder's priority, and if it does, lock1 "donates" its priority to
+the old holder, and then thread_update_locks is called on old_holder
+to update the lock the old_holder is waiting on if there is any. 
+
+4. Nested donation happens inside the thread_update_locks function. 
+It updates the priority of the lock (call it lock2) that the 
+old_holder is waiting on,if there is any. Then the function 
+lock_reset_priority() is called upon lock2, to update both lock2 and
+its holder's priority. If lock2's holder is updated, thread_update_locks
+is called again to update ITS waiting_lock, if there is any. This nested
+call goes on until there is no more locks or threads on the chain, or
+if a nest_level of 8 is reached. 
+
+5. Back to lock_acquire(). When donation is completed, sema_down() is called
+and the thread will wait for the lock to be released. Once it got the lock,
+it clears its waiting_lock field, push the lock into its "locks" field, and
+call lock_reset_priority() to update the priority of the lock it just acquired.
+
 >> B5: Describe the sequence of events when lock_release() is called
 >> on a lock that a higher-priority thread is waiting for.
+
+1. When lock_release is called upon a lock that a higher-priority thread is
+waiting for, the lock is first removed from the current thread's "locks" list,
+and then thread_refund_priority() is called to reset the donated_priority of 
+the current thread given that THIS lock is no longer in its acquired locks list.
+
+2. Note that inside the thread_refund_priority, the thread finds the new
+highest priority from the updated list of locks that it owns, and set its
+donated_priority accordingly. Note that since there can't be any lock that this
+thread is currently waiting on (given the fact that it's RUNNING), no nested
+call here.
+
+3. Then sema_up() is called to release the lock to the waiting thread. Nothing
+else will happen inside the lock_release() function (except for 
+intr_set_level), and the higher_priority thread will take on, and execute
+part 5 of my answer to B4. 
 
 ---- SYNCHRONIZATION ----
 
@@ -88,10 +220,43 @@
 >> how your implementation avoids it.  Can you use a lock to avoid
 >> this race?
 
+void thread_set_priority(int new_priority) {
+    struct thread *hp;
+    enum intr_level old_level;
+    int old_priority;
+
+    ASSERT(new_priority <= PRI_MAX && new_priority >= PRI_MIN);
+    old_level = intr_disable();
+    old_priority = thread_get_priority();
+    thread_current()->priority = new_priority;
+    if (new_priority < old_priority && !list_empty(&ready_list)) {
+        hp = list_entry(list_max(&ready_list, thread_prioritycomp, NULL),
+                        struct thread, elem);
+        if (hp->priority > new_priority)
+            thread_yield();
+    }
+    intr_set_level(old_level);
+}
+
+One potential race would be if the thread is preempted after it's performed
+the if (!list_empty(&ready_list)) check, and the other threads are blocked
+since the preemption, list_max will fail the assertion and error will occur.
+
+Using a lock on the ready_list is not a good idea. Because it will simply stop
+the schedule() from functioning. 
+
 ---- RATIONALE ----
 
 >> B7: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+We originally considered using direct priority donation from thread to thread
+without going through lock. However, this turns out to be a lot more
+complicated since it is possible that multiple threads are waiting on a same
+lock, and keeping track of just the lock instead of all the threads will
+be much simpler. It also makes priority refunding and nest priority donation
+pretty easy because threads and locks keep track of each other, instead
+of a complicated network of threads keeping track of other threads. 
 
 			  ADVANCED SCHEDULER
 			  ==================

@@ -17,7 +17,7 @@
 >> What is the Git repository and commit hash for your submission?
 
    Repository URL:  https://github.com/jchen2calteh/pintos-cz
-   commit
+   commit           bfa325478319049cbe3f1115a4e618abc866edf9
 
 ---- PRELIMINARIES ----
 

@@ -171,6 +171,18 @@ Two new fields are added to the struct lock definition, namely:
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+1. Added the following fields in struct thread:
+       int nice
+       int32_t recent_cpu
+       
+   nice stores the nice value of the thread; recent_cpu stores the
+   the recent_cpu value of the thread.
+
+2. New global variable in thread.c:
+       int32_t load_avg
+   
+   load_avg stores the system's load average.
+
 ---- ALGORITHMS ----
 
 >> C2: Suppose threads A, B, and C have nice values 0, 1, and 2.  Each
@@ -178,26 +190,38 @@ Two new fields are added to the struct lock definition, namely:
 >> scheduling decision and the priority and recent_cpu values for each
 >> thread after each given number of timer ticks:
 
+Note TIME_FREQ = 100, then in our example below, recent_cpu and 
+load_avg never get updated by the formula.
+
 timer  recent_cpu    priority   thread
 ticks   A   B   C   A   B   C   to run
 -----  --  --  --  --  --  --   ------
- 0
- 4
- 8
-12
-16
-20
-24
-28
-32
-36
+ 0      0   0   0  63  61  59    A
+ 4      4   0   0  62  61  59    A
+ 8      8   0   0  61  61  59    B
+12      8   4   0  61  60  59    A
+16     12   4   0  60  60  59    B
+20     12   8   0  60  59  59    A
+24     16   8   0  59  59  59    B  
+28     16  12   0  59  58  59    C
+32     16  12   4  59  58  58    A
+36     20  12   4  58  58  58    B
 
 >> C3: Did any ambiguities in the scheduler specification make values
 >> in the table uncertain?  If so, what rule did you use to resolve
 >> them?  Does this match the behavior of your scheduler?
 
+Yes. Given some threads with the same highest priority, which one
+the scheduler will be choosen is uncertain. Our scheduler will
+solve this with round robin algorithm to select fairly.
+
 >> C4: How is the way you divided the cost of scheduling between code
 >> inside and outside interrupt context likely to affect performance?
+
+Indeed too much code in the interrupt will slow down the run-time of
+the scheduler, then we tried to be as concise as possible in our interrupt
+context, and by using "if" statements to avoid unnecessary extra works
+for some situations.
 
 ---- RATIONALE ----
 
@@ -206,12 +230,28 @@ ticks   A   B   C   A   B   C   to run
 >> time to work on this part of the project, how might you choose to
 >> refine or improve your design?
 
+The advantage of our design is it is very straightforward and concise,
+as we kept necessary work to minimum inside the time interrupt, our
+overall performance should be good. The only drawback is the high
+frequency of recalculating thread priorities - which will definitely
+reduce the overall performance. (once each four ticks...) The freqency
+should be reduced, but to what amount still requires further research
+to keep fairness for the scheduler.
+
 >> C6: The assignment explains arithmetic for fixed-point math in
 >> detail, but it leaves it open to you to implement it.  Why did you
 >> decide to implement it the way you did?  If you created an
 >> abstraction layer for fixed-point math, that is, an abstract data
 >> type and/or a set of functions or macros to manipulate fixed-point
 >> numbers, why did you do so?  If not, why not?
+
+We used macro definitions, which will avoid overheads of functions calls
+and thus improving the entire performance of our scheduler. Hence our
+fixed-point math is both straightforward and concise. The drawback
+is that as we are keeping the working code in minimum, we do not check
+for overflows in calculation. Hence, for a long formula, we have to break
+it step by step - creating intermediate tmp variables -  to avoid overflows,
+and hence do the calculation without much precision loss.
 
 			   SURVEY QUESTIONS
 			   ================

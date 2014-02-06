@@ -37,26 +37,75 @@
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+I've declared one additional static variable, being:
+
+static struct list sleeping_list;
+
+This list keeps record of all the threads sleeping on the clock now. 
+
+Also, an additional field is added to the struct thread definition:
+
+struct thread {
+    ...
+    int64_t wakeup_time;                /*!< Wake up time of the thread */
+    ...
+};
+
+wakeup_time records the set wakeup time for a sleeping thread.
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe what happens in a call to timer_sleep(),
 >> including the effects of the timer interrupt handler.
 
+When timer_sleep is called, the wakeup_time is first calculated using
+the current time and the time span that the thread is supposed to sleep
+for. And then the wakeup_time of the current thread will be set accordingly,
+and then the current thread will be inserted (sorted sense) to the sorted
+list of sleeping_list. And then the thread is blocked. 
+
+When the timer interrupt handler is called, it checked for the first
+thread in the sleeping list to see if the current time exceeds its 
+wakeup_time. If it does, then the handler will unblock the thread, and 
+check for the next. Since the list is sorted by wakeup_time, the handler
+can stop when it reaches a thread that has wakeup_time greater than
+current time. 
+
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
+
+The sleeping_list is sorted at the time of the thread insertion, so the
+interrupt handler only needs to check for threads to be woken up at the
+front of the sleeping_list. This greatly reduces the time spent on handler
+compared to the method where the list is unsorted and the handler needs
+to traverse the whole list to check for wakeup threads. 
 
 ---- SYNCHRONIZATION ----
 
 >> A4: How are race conditions avoided when multiple threads call
 >> timer_sleep() simultaneously?
 
+During the timer_sleep execution, the interrupt is disabled when executing
+list_insert_ordered and thread_block to ensure atomic operation of the two
+lines. Therefore, race condition will not happen when multiple threads call
+timer_sleep(), because modification of the list and thread_block always happen
+at the same time. 
+
 >> A5: How are race conditions avoided when a timer interrupt occurs
 >> during a call to timer_sleep()?
+
+As said in A4, the operation of list_insert and thread_block is atomic, so
+timer_interrupt will not occur in between. Thus race condition is avoided.
 
 ---- RATIONALE ----
 
 >> A6: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+This design is fast, because I determined that call to timer_sleep will be 
+a lot rarer than call to timer_interrupt, thus sacrificing a little time
+on list_insert_ordered for the minimal time in the handler checking is
+worth it. 
 
 			 PRIORITY SCHEDULING
 			 ===================
@@ -66,6 +115,26 @@
 >> B1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+
+Three new fields are added to the struct thread definition, namely:
+
+1. int donated_priority:
+This is used to keep track of priority donated by other
+threads because of locks this thread is holding. 
+
+2. struct list locks:
+This keeps track of all the locks that the thread is currently holding. 
+It is useful when one of the locks is released, and the donated_priority
+needs to be recalculated.
+
+3. struct lock * waiting_lock:
+This records the lock that the thread is currently waiting on (if any).
+It is useful when the priority of this thread is changed, and thus the
+priority donation FROM this thread needs to be recalculated.
+
+Two new fields are added to the struct lock definition, namely:
+
+1. 
 
 >> B2: Explain the data structure used to track priority donation.
 >> Use ASCII art to diagram a nested donation.  (Alternately, submit a

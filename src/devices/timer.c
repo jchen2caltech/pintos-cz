@@ -93,17 +93,16 @@ bool timer_threadcomp(const struct list_elem *a,
     return (t1->wakeup_time < t2->wakeup_time);
 }
 
-/*! Sleeps for approximately TICKS timer ticks.  Interrupts must
-    be turned on. */
+/*! Sleeps for approximately TICKS timer ticks. */
 void timer_sleep(int64_t ticks) {
     int64_t wakeup_time = timer_ticks();
     enum intr_level old_level;
     struct thread *curr;
 
-    old_level = intr_disable();
     wakeup_time += ticks;
     curr = thread_current();
     curr->wakeup_time = wakeup_time;
+    old_level = intr_disable();
     list_insert_ordered(&sleeping_list, &curr->elem, timer_threadcomp, NULL);
     thread_block();
     intr_set_level(old_level);

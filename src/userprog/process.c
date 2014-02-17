@@ -20,6 +20,9 @@
 
 static thread_func start_process NO_RETURN;
 static bool load(const char *cmdline, void (**eip)(void), void **esp);
+static bool arg_pass(const char *cmdline, void **esp);
+static bool push4(char** stack_ptr, void* val, void** esp);
+static void get_prog_name(const char* cmdline, char* prog_name);
 
 /*! Starts a new thread running a user program loaded from FILENAME.  The new
     thread may be scheduled (and may even exit) before process_execute()
@@ -28,16 +31,22 @@ static bool load(const char *cmdline, void (**eip)(void), void **esp);
 tid_t process_execute(const char *file_name) {
     char *fn_copy;
     tid_t tid;
-
+    
+   
+    
     /* Make a copy of FILE_NAME.
        Otherwise there's a race between the caller and load(). */
     fn_copy = palloc_get_page(0);
     if (fn_copy == NULL)
         return TID_ERROR;
     strlcpy(fn_copy, file_name, PGSIZE);
+    
+     //Varaibles to extract the program name
+    char prog_name[14];
+    get_prog_name(fn_copy, prog_name);
 
     /* Create a new thread to execute FILE_NAME. */
-    tid = thread_create(file_name, PRI_DEFAULT, start_process, fn_copy);
+    tid = thread_create(prog_name, PRI_DEFAULT, start_process, fn_copy);
     if (tid == TID_ERROR)
         palloc_free_page(fn_copy); 
     return tid;
@@ -190,7 +199,7 @@ static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
 /*! Loads an ELF executable from FILE_NAME into the current thread.  Stores the
     executable's entry point into *EIP and its initial stack pointer into *ESP.
     Returns true if successful, false otherwise. */
-bool load(const char *file_name, void (**eip) (void), void **esp) {
+bool load(const char *cmdline, void (**eip) (void), void **esp) {
     struct thread *t = thread_current();
     struct Elf32_Ehdr ehdr;
     struct file *file = NULL;
@@ -203,11 +212,14 @@ bool load(const char *file_name, void (**eip) (void), void **esp) {
     if (t->pagedir == NULL) 
         goto done;
     process_activate();
+    
+    char prog_name[PGSIZE];
+    get_prog_name(cmdline, prog_name);
 
     /* Open executable file. */
-    file = filesys_open(file_name);
+    file = filesys_open(prog_name);
     if (file == NULL) {
-        printf("load: %s: open failed\n", file_name);
+        printf("load: %s: open failed\n", prog_name);
         goto done; 
     }
 
@@ -216,7 +228,7 @@ bool load(const char *file_name, void (**eip) (void), void **esp) {
         memcmp(ehdr.e_ident, "\177ELF\1\1\1", 7) || ehdr.e_type != 2 ||
         ehdr.e_machine != 3 || ehdr.e_version != 1 ||
         ehdr.e_phentsize != sizeof(struct Elf32_Phdr) || ehdr.e_phnum > 1024) {
-        printf("load: %s: error loading executable\n", file_name);
+        printf("load: %s: error loading executable\n", prog_name);
         goto done; 
     }
 
@@ -285,6 +297,10 @@ bool load(const char *file_name, void (**eip) (void), void **esp) {
 
     /* Start address. */
     *eip = (void (*)(void)) ehdr.e_entry;
+    
+    /*Passng Arguments*/
+    if (!arg_pass(cmdline, esp))
+        goto done;
 
     success = true;
 
@@ -429,3 +445,89 @@ static bool install_page(void *upage, void *kpage, bool writable) {
             pagedir_set_page(t->pagedir, upage, kpage, writable));
 }
 
+/*! Parses the arguments into tokens;
+    then pushes argv, argc, and fake return address in reverse order */
+static bool arg_pass(const char*cmdline, void **esp) {
+   char* stack_top = *esp;
+   char* delimiters = " ";
+   char* curr;
+   char* word_begin;
+   char* word_end;
+   size_t word_len;
+   
+   curr = cmdline + strlen(cmdline);
+   while(curr >= cmdline)
+   {
+       while(curr>=cmdline && (strrchr(delimiters, *curr) != NULL 
+           || *curr =='\0'))
+           curr--;
+       word_end = curr + 1;
+       while(curr>=cmdline && strrchr(delimiters, *curr) == NULL)
+           curr--;
+       word_begin = curr + 1;
+       word_len = word_end - word_begin;
+       
+       if ((int)*esp - (int)stack_top + word_len + 1 > PGSIZE)
+           return false;
+       strlcpy(stack_top - word_len - 1, word_begin, word_len + 1);
+       *(stack_top - 1) = '\0';
+       stack_top -= (word_len + 1);
+       
+       
+   }
+ 
+   char* p_argv_begin = stack_top;
+   int count_limit;
+   if ((int)stack_top % 4 == 3) count_limit = 1; else count_limit = 2;
+   while(count_limit > 0){
+       if ((int)*esp - (int)stack_top + 1 > PGSIZE)
+           return false;
+       stack_top--;
+       *stack_top = 0;
+       
+       if(((int)stack_top)%4 == 0)
+           count_limit--;
+   }
+   
+   char *p = PHYS_BASE - 1;
+   int argc = 0;
+   while (p>=p_argv_begin){
+      p--;
+      while ((p>=p_argv_begin) && (*p!='\0'))
+          p--;
+      if (!push4(&stack_top, (void*)(p+1), esp))
+          return false;
+      argc++;
+       
+   }
+   
+   if (!push4(&stack_top, (void*)(stack_top), esp))
+       return false;
+   
+   if (!push4(&stack_top, (void*)(argc), esp))
+       return false;
+    
+   if (!push4(&stack_top, NULL, esp))
+       return false;
+   
+   *esp = stack_top;
+   return true;
+}
+
+static bool push4(char** stack_ptr, void* val, void** esp) {
+    if ((int)*esp - (int)*stack_ptr + 4 > PGSIZE)
+        return false;
+    *stack_ptr -= 4;
+    *(void **) *stack_ptr = val;
+    return true;
+}
+
+static void get_prog_name(const char* cmdline, char* prog_name){
+    char* first_space = strchr(cmdline, ' ');
+    if (first_space != NULL)
+        strlcpy(prog_name, cmdline, first_space - cmdline + 1);
+    else
+        strlcpy(prog_name, cmdline, strlen(cmdline) + 1);
+    
+    printf("%s\n", prog_name);
+}

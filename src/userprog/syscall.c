@@ -9,18 +9,110 @@
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 #include "devices/input.h"
+#include "devices/shutdown.h"
 #include "userprog/pagedir.h"
 
 static void syscall_handler(struct intr_frame *);
 bool checkva(const void* va);
 struct f_info *findfile(uint32_t fd);
+static uint32_t read4(struct intr_frame * f, int offset);
 
 void syscall_init(void) {
     intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
-static void syscall_handler(struct intr_frame *f UNUSED) {
-    halt();
+static void syscall_handler(struct intr_frame *f) {
+    // Retrieve syscall number
+    int status;
+    const char *cmdline, *f_name;
+    unsigned f_size, position, size;
+    uint32_t fd;
+    uint32_t sys_no = read4(f, 0);
+    void *buffer; 
+    pid_t pid;
+
+    switch (sys_no) {
+        case SYS_HALT:
+            halt();
+            break;
+            
+        case SYS_EXIT:
+            status = (int) read4(f, 4);
+            exit(status);
+            break;
+            
+        case SYS_EXEC:
+            cmdline = (const char*) read4(f, 4);
+            f->eax = (uint32_t) exec(cmdline);
+            break;
+            
+        case SYS_WAIT:
+            pid = (pid_t) read4(f, 4);
+            f->eax = (uint32_t) wait(pid);
+            break;
+            
+        case SYS_CREATE:
+            f_name = (const char*) read4(f, 4);
+            f_size = (unsigned) read4(f, 8);
+            f->eax = (uint32_t) create(f_name, f_size);
+            break;
+            
+        case SYS_REMOVE:
+            f_name = (const char*) read4(f, 4);
+            f->eax = (uint32_t) remove(f_name);
+            break;
+            
+        case SYS_OPEN:
+            f_name = (const char*) read4(f, 4);
+            f->eax = (uint32_t) open(f_name);
+            break;
+            
+        case SYS_FILESIZE:
+            fd = (uint32_t) read4(f, 4);
+            f->eax = (uint32_t) filesize(fd);
+            break;
+            
+        case SYS_READ:
+            fd = (uint32_t) read4(f, 4);
+            buffer = (void*) read4(f, 8);
+            size = (unsigned) read4(f, 12);
+            f->eax = (uint32_t) read(fd, buffer, size);
+            break;
+            
+        case SYS_WRITE:
+            fd = (uint32_t) read4(f, 4);
+            buffer = (void*) read4(f, 8);
+            size = (unsigned) read4(f, 12);
+            f->eax = (uint32_t) write(fd, buffer, size);
+            break;
+            
+        case SYS_SEEK:
+            fd = (uint32_t) read4(f, 4);
+            position = (unsigned) read4(f, 8);
+            seek(fd, position);
+            break;
+            
+        case SYS_TELL:
+            fd = (uint32_t) read4(f, 4);
+            f->eax = (uint32_t) tell(fd);
+            break;
+            
+        case SYS_CLOSE:
+            fd = (uint32_t) read4(f, 4);
+            close(fd);
+            break;
+            
+        default:
+            exit(-1);
+            break;
+    }
+    
+}
+
+static uint32_t read4(struct intr_frame * f, int offset) {
+    if (!checkva(f->esp + offset))
+        exit(-1);
+    return *((uint32_t *) (f->esp + offset));
 }
 
 void halt(void) {
@@ -115,16 +207,16 @@ bool remove(const char *f_name) {
 
 }
 
-int open(const char *file) {
+int open(const char *f_name) {
     struct thread *t;
     struct f_info *f;
     uint32_t fd;
 
-    if (!checkva(file) || !(checkva(file + strlen(file))))
+    if (!checkva(f_name) || !(checkva(f_name + strlen(f_name))))
        exit(-1);
     
     //Lock?!
-    struct file* f_open = filesys_open(file);
+    struct file* f_open = filesys_open(f_name);
     //Unlock?!
     
     if (f_open == NULL) {

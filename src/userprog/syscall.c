@@ -209,12 +209,12 @@ bool remove(const char *f_name) {
 
 }
 
-int open(const char *file) {
+int open(const char *f_name) {
     struct thread *t;
     struct f_info *f;
     uint32_t fd;
 
-    if (!checkva(file) || !(checkva(file + strlen(file))))
+    if (!checkva(f_name) || !(checkva(f_name + strlen(f_name))))
        exit(-1);
     
     //Lock?!

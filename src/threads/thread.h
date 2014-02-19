@@ -10,6 +10,7 @@
 #include <list.h>
 #include <stdint.h>
 #include <filesys/file.h>
+#include "synch.h"
 
 /*! States in a thread's life cycle. */
 enum thread_status {

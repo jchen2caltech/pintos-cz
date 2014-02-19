@@ -6,10 +6,26 @@
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
 #include "filesys/filesys.h"
+#include "filesys/file.h"
 #include "devices/input.h"
 #include "userprog/pagedir.h"
 
 static void syscall_handler(struct intr_frame *);
+void halt(void);
+void exit(int status);
+pid_t exec(const char *cmd_line);
+int wait(pid_t pid);
+bool create(const char *file, unsigned initial_size);
+bool remove(const char *file);
+int open(const char *file);
+int filesize(uint32_t fd);
+int read(uint32_t fd, void *buffer, unsigned size);
+int write(uint32_t fd, const void *buffer, unsigned size);
+void seek(uint32_t fd, unsigned position);
+unsigned tell(uint32_t fd);
+void close(uint32_t fd);
+bool checkva(const void* va);
+struct f_info *findfile(uint32_t fd);
 
 void syscall_init(void) {
     intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
@@ -121,7 +137,7 @@ void exit(int status) {
         ce = list_begin(&pt->child_returnstats);
         while (!trs && ce->next && ce->next->next) {
             cs = list_entry(ce, struct thread_return_stat, elem);
-            if (cs->pid == pid)
+            if (cs->pid == t->tid)
                 trs = cs;
             ce = list_next(ce);
         }
@@ -129,9 +145,9 @@ void exit(int status) {
             trs->stat = status;
             sema_up(&trs->sem);
         }
-        list_remove(&pt->child_processes, &t->childelem);
+        list_remove(&t->childelem);
     } 
-    ce = list_begin(t->child_processes);
+    ce = list_begin(&t->child_processes);
     while (ce->next && ce->next->next) {
         ct = list_entry(ce, struct thread, childelem);
         ct->parent = NULL;
@@ -186,35 +202,39 @@ bool remove(const char *f_name) {
     if (!checkva(f_name))
         exit(-1);
     // Lock?!
-    bool flag = filesys_create(f_name);
+    bool flag = filesys_remove(f_name);
     // Unlock?!
     return flag;
     
 
 }
 
-int open(const char *f_name) {
-    if (!checkva(f_name) || !(checkva(f_name + strlen(f_name))))
-        exit(-1);
+int open(const char *file) {
+    struct thread *t;
+    struct f_info *f;
+    uint32_t fd;
+
+    if (!checkva(file) || !(checkva(file + strlen(file))))
+       exit(-1);
     
     //Lock?!
     struct file* f_open = filesys_open(f_name);
     //Unlock?!
     
     if (f_open == NULL) {
-        return -1
+        return -1;
     } else {
-        struct thread* t = thread_current();
+        t = thread_current();
         if (t->f_count > 127)
             exit(-1);
         
         // Set up new f_info
-        struct f_info* f = (struct f_info*) malloc(sizeof(f_info));
+        f = (struct f_info*) malloc(sizeof(struct f_info));
         f->f = f_open;
         f->pos = 0;
         
         //lock?!
-        uint32_t fd = (++(t->fd_max));
+        fd = (++(t->fd_max));
         f->fd = fd;
         
         // Push f_info to the thread's list, and update thread's list count.
@@ -310,7 +330,7 @@ unsigned tell(uint32_t fd) {
 
 void close(uint32_t fd) {
     struct f_info* f = findfile(fd);
-    list_remove(f->elem);
+    list_remove(&f->elem);
     
     //lock?
     
@@ -326,7 +346,7 @@ void close(uint32_t fd) {
    and has been mapped. */
 
 bool checkva(const void* va){
-    struct *t = thread_current();
+    struct thread *t = thread_current();
     return (is_user_vaddr(va) && (pagedir_get_page(t->pagedir, va) != NULL));
 }
 
@@ -334,11 +354,11 @@ bool checkva(const void* va){
 
 struct f_info* findfile(uint32_t fd) {
     
-    struct *t = thread_current();
+    struct thread *t = thread_current();
     struct list* f_lst = &(t->f_lst);
     struct list_elem *e;
     
-    for (e = list_begin(f_lst); e != list_end(f_lst); e = lst_next(e)) {
+    for (e = list_begin(f_lst); e != list_end(f_lst); e = list_next(e)) {
         struct f_info* f = list_entry(e, struct f_info, elem);
         if (f->fd == fd)
             return f;

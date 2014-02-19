@@ -66,3 +66,11 @@ unsigned tell(int fd) {
 void close(int fd) {
 
 }
+
+/*!Checks whether the give user address va is inside the userprog stack
+   and has been mapped. */
+
+bool checkva(const void* va){
+    struct *t = thread_current();
+    return (is_user_vaddr(va) && (pagedir_get_page(t->pagedir, va) != NULL));
+}

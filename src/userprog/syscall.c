@@ -25,7 +25,37 @@ void halt(void) {
 }
 
 void exit(int status) {
+    struct thread *t, *pt, *ct;
+    enum intr_level old_level;
+    struct list_elem *ce;
+    struct thread_return_stat *cs, *trs;
 
+    t = thread_current();
+    pt = t->parent;
+    trs = NULL;
+    old_level = intr_disable();
+    if (pt) {
+        ce = list_begin(&pt->child_returnstats);
+        while (!trs && ce->next && ce->next->next) {
+            cs = list_entry(ce, struct thread_return_stat, elem);
+            if (cs->pid == pid)
+                trs = cs;
+            ce = list_next(ce);
+        }
+        if (trs) {
+            trs->stat = status;
+            sema_up(&trs->sem);
+        }
+        list_remove(&pt->child_processes, &t->childelem);
+    } 
+    ce = list_begin(t->child_processes);
+    while (ce->next && ce->next->next) {
+        ct = list_entry(ce, struct thread, childelem);
+        ct->parent = NULL;
+        ce = list_next(ce);
+    }
+    intr_set_level(old_level);
+    thread_exit();
 }
 
 pid_t exec(const char *cmd_line) {
@@ -33,7 +63,30 @@ pid_t exec(const char *cmd_line) {
 }
 
 int wait(pid_t pid) {
+    struct thread *ct;
+    struct list_elem *ce;
+    struct thread_return_stat *cs, *trs;
+    int status;
+    enum intr_level old_level;
 
+    trs = NULL;
+    ct = thread_current();
+    old_level = intr_disable();
+    ce = list_begin(&ct->child_returnstats);
+    while (!trs && ce->next && ce->next->next) {
+        cs = list_entry(ce, struct thread_return_stat, elem);
+        if (cs->pid == pid)
+            trs = cs;
+        ce = list_next(ce);
+    }
+    if (!trs)
+        return -1;
+    sema_down(&trs->sem);
+    status = trs->stat;
+    list_remove(&trs->elem);
+    free(trs);
+    intr_set_level(old_level);
+    return trs->stat;
 }
 
 bool create(const char *file, unsigned initial_size) {

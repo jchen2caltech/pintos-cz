@@ -501,6 +501,7 @@ static bool is_thread(struct thread *t) {
 /*! Does basic initialization of T as a blocked thread named NAME. */
 static void init_thread(struct thread *t, const char *name, int priority) {
     enum intr_level old_level;
+    struct thread_return_stat trs;
 
     ASSERT(t != NULL);
     ASSERT(PRI_MIN <= priority && priority <= PRI_MAX);
@@ -530,17 +531,21 @@ static void init_thread(struct thread *t, const char *name, int priority) {
     }
     t->magic = THREAD_MAGIC;
     list_init(&t->locks); 
-    t->waiting_lock = NULL; 
+    t->waiting_lock = NULL;
 
 #ifdef USERPROG
-    sema_init(&t->sem, 1);
-    sema_down(&t->sem);
+    list_init(&t->child_returnstats);
     list_init(&t->child_processes);
     t->parent = thread_current();
-    list_push_back(&(t->parent->child_processes), &t->elem);
     list_init(&t->f_lst);
     t->f_count = 2;
     t->fd_max = 1;
+    trs = malloc(sizeof(struct thread_return_stat));
+    trs->pid = (pid_t)t->tid;
+    sema_init(&trs->sem, 0);
+    list_push_back(&(t->parent->child_returnstats), &trs->elem);
+    list_push_back(&(t->parent->child_processes), &t->childelem);
+
 #endif
 
     old_level = intr_disable();

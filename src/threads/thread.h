@@ -118,8 +118,9 @@ struct thread {
     /**@{*/
     uint32_t *pagedir;                  /*!< Page directory. */
     /**@{*/
-    struct semaphore sem;
+    struct list child_returnstats;
     struct list child_processes;
+    struct list_elem childelem;
     struct thread * parent;
     struct list f_lst;
     uint32_t f_count;
@@ -132,6 +133,12 @@ struct thread {
     /**@}*/
 };
 
+struct thread_return_stat{
+    pid_t pid;
+    struct semaphore sem;
+    int stat;
+    struct list_elem elem;
+};
 
 /*! The file info struct for each file accessed by a process */
 struct f_info {
@@ -144,7 +151,7 @@ struct f_info {
     // file descriptor
     uint32_t fd;
     
-}
+};
 
 /*! If false (default), use round-robin scheduler.
     If true, use multi-level feedback queue scheduler.

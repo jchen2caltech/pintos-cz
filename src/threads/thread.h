@@ -10,6 +10,7 @@
 #include <list.h>
 #include <stdint.h>
 #include <filesys/file.h>
+#include "synch.h"
 
 /*! States in a thread's life cycle. */
 enum thread_status {
@@ -144,7 +145,7 @@ struct thread_return_stat{
 /*! The file info struct for each file accessed by a process */
 struct f_info {
     // The file object
-    file* f;
+    struct file* f;
     // The position of current access
     off_t pos;
     // List element for the list of all files of a process

@@ -15,9 +15,92 @@ void syscall_init(void) {
     intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
-static void syscall_handler(struct intr_frame *f UNUSED) {
-    printf("system call!\n");
-    thread_exit();
+static void syscall_handler(struct intr_frame *f) {
+    // Retrieve syscall number
+    int sys_no = read4(f, 0);
+    
+    switch (sys_no) {
+        case SYS_HALT:
+            halt();
+            break;
+            
+        case SYS_EXIT:
+            int status = (int) read4(f, 4);
+            exit(status);
+            break;
+            
+        case SYS_EXEC:
+            const char* cmdline = (const char*) read4(f, 4);
+            f->eax = (uint32_t) exec(cmdline);
+            break;
+            
+        case SYS_WAIT:
+            pid_t pid = (pid_t) read4(f, 4);
+            f->eax = (uint32_t) wait(pid);
+            break;
+            
+        case SYS_CREATE:
+            const char* f_name = (const char*) read4(f, 4);
+            unsigned f_size = (unsigned) read4(f, 8);
+            f->eax = (uint32_t) create(f_name, f_size);
+            break;
+            
+        case SYS_REMOVE:
+            const char* f_name = (const char*) read4(f, 4);
+            f->eax = (uint32_t) remove(f_name);
+            break;
+            
+        case SYS_OPEN:
+            const char* f_name = (const char*) read4(f, 4);
+            f->eax = (uint32_t) open(f_name);
+            break;
+            
+        case SYS_FILESIZE:
+            uint32_t fd = (uint32_t) read4(f, 4);
+            f->eax = (uint32_t) filesize(fd);
+            break;
+            
+        case SYS_READ:
+            uint32_t fd = (uint32_t) read4(f, 4);
+            void* buffer = (void*) read4(f, 8);
+            unsigned size = (unsigned) read4(f, 12);
+            f->eax = (uint32_t) read(fd, buffer, size);
+            break;
+            
+        case SYS_WRITE:
+            uint32_t fd = (uint32_t) read4(f, 4);
+            void* buffer = (void*) read4(f, 8);
+            unsigned size = (unsigned) read4(f, 12);
+            f->eax = (uint32_t) write(fd, buffer, size);
+            break;
+            
+        case SYS_SEEK:
+            uint32_t fd = (uint32_t) read4(f, 4);
+            unsigned position = (unsigned) read4(f, 8);
+            seek(fd, position);
+            break;
+            
+        case SYS_TELL:
+            uint32_t fd = (uint32_t) read4(f, 4);
+            f->eax = (uint32_t) tell(fd);
+            break;
+            
+        case SYS_CLOSE:
+            uint32_t fd = (uint32_t) read4(f, 4);
+            close(fd);
+            break;
+            
+        default:
+            exit(-1);
+            break;
+    }
+    
+}
+
+static uint32_t read4(struct intr_frame * f, int offset) {
+    if (!checkva(f->esp + offset))
+        exit(-1);
+    return *((uint32_t *) (f->esp + offset));
 }
 
 void halt(void) {

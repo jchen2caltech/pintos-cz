@@ -105,21 +105,21 @@ int wait(pid_t pid) {
     return trs->stat;
 }
 
-bool create(const char *file, unsigned initial_size) {
-    if (!checkva(file))
+bool create(const char *f_name, unsigned initial_size) {
+    if (!checkva(f_name))
         exit(-1);
     // Probably Lock?!
-    bool flag = filesys_create(file, initial_size);
+    bool flag = filesys_create(f_name, initial_size);
     // Unlock?!
     return flag;
 
 }
 
-bool remove(const char *file) {
-    if (!checkva(file))
+bool remove(const char *f_name) {
+    if (!checkva(f_name))
         exit(-1);
     // Lock?!
-    bool flag = filesys_remove(file);
+    bool flag = filesys_remove(f_name);
     // Unlock?!
     return flag;
     
@@ -132,10 +132,10 @@ int open(const char *file) {
     uint32_t fd;
 
     if (!checkva(file) || !(checkva(file + strlen(file))))
-        exit(-1);
+       exit(-1);
     
     //Lock?!
-    struct file* f_open = filesys_open(file);
+    struct file* f_open = filesys_open(f_name);
     //Unlock?!
     
     if (f_open == NULL) {

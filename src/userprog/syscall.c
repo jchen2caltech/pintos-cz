@@ -89,33 +89,33 @@ int wait(pid_t pid) {
     return trs->stat;
 }
 
-bool create(const char *file, unsigned initial_size) {
-    if (!checkva(file))
+bool create(const char *f_name, unsigned initial_size) {
+    if (!checkva(f_name))
         exit(-1);
     // Probably Lock?!
-    bool flag = filesys_create(file, initial_size);
+    bool flag = filesys_create(f_name, initial_size);
     // Unlock?!
     return flag;
 
 }
 
-bool remove(const char *file) {
-    if (!checkva(file))
+bool remove(const char *f_name) {
+    if (!checkva(f_name))
         exit(-1);
     // Lock?!
-    bool flag = filesys_create(file);
+    bool flag = filesys_create(f_name);
     // Unlock?!
     return flag;
     
 
 }
 
-int open(const char *file) {
-    if (!checkva(file) || !(checkva(file + strlen(file))))
+int open(const char *f_name) {
+    if (!checkva(f_name) || !(checkva(f_name + strlen(f_name))))
         exit(-1);
     
     //Lock?!
-    struct file* f_open = filesys_open(file);
+    struct file* f_open = filesys_open(f_name);
     //Unlock?!
     
     if (f_open == NULL) {
@@ -169,7 +169,7 @@ int read(uint32_t fd, void *buffer, unsigned size) {
         }
     } else {
         struct f_info* f = findfile(fd);
-        file* fin = f->f;
+        struct file* fin = f->f;
         off_t pos = f->pos;
         
         //Lock?!
@@ -195,7 +195,7 @@ int write(uint32_t fd, const void *buffer, unsigned size) {
         
     } else {
         struct f_info* f = findfile(fd);
-        file* fout = f->f;
+        struct file* fout = f->f;
         off_t pos = f->pos;
         
         //Lock?!

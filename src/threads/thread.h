@@ -117,6 +117,7 @@ struct thread {
     /**@{*/
     uint32_t *pagedir;                  /*!< Page directory. */
     /**@{*/
+    struct semaphore sem;
 #endif
 
     /*! Owned by thread.c. */

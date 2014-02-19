@@ -439,7 +439,7 @@ int thread_get_load_avg(void) {
 int thread_get_recent_cpu(void) {
     return F2IN(FMULI(thread_current()->recent_cpu, 100));
 }
-
+
 /*! Idle thread.  Executes when no other thread is ready to run.
 
     The idle thread is initially put on the ready list by thread_start().
@@ -480,7 +480,7 @@ static void kernel_thread(thread_func *function, void *aux) {
     function(aux);       /* Execute the thread function. */
     thread_exit();       /* If function() returns, kill the thread. */
 }
-
+
 /*! Returns the running thread. */
 struct thread * running_thread(void) {
     uint32_t *esp;
@@ -531,6 +531,11 @@ static void init_thread(struct thread *t, const char *name, int priority) {
     t->magic = THREAD_MAGIC;
     list_init(&t->locks); 
     t->waiting_lock = NULL; 
+
+#ifdef USERPROG
+    sema_init(&t->sem, 1);
+    sema_down(&t->sem);
+#endif
 
     old_level = intr_disable();
     list_push_back(&all_list, &t->allelem);

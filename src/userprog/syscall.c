@@ -1,4 +1,5 @@
 #include "userprog/syscall.h"
+#include "userprog/process.h"
 #include <stdio.h>
 #include <string.h>
 #include <syscall-nr.h>
@@ -157,10 +158,10 @@ void exit(int status) {
 
 pid_t exec(const char *cmd_line) {
     pid_t child = process_execute(cmd_line);
-    thread_return_stat *ts = list_entry(list_back(thread_current()->\
-                                        child_returnstats), 
-                                        thread_return_stat, elem);
-    sema_down(&ts->elem);
+    struct thread_return_stat *ts = list_entry(list_back(&thread_current()->\  
+                                               child_returnstats), struct \
+                                               thread_return_stat, elem);
+    sema_down(&ts->sem);
     return (ts->stat == -1 ? -1 : child);
 }
 

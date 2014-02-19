@@ -123,7 +123,7 @@ int process_wait(tid_t child_tid) {
     ce = list_begin(&ct->child_returnstats);
     while (!trs && ce->next && ce->next->next) {
         cs = list_entry(ce, struct thread_return_stat, elem);
-        if (cs->pid == pid)
+        if (cs->pid == child_tid)
             trs = cs;
         ce = list_next(ce);
     }

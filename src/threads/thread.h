@@ -118,6 +118,8 @@ struct thread {
     uint32_t *pagedir;                  /*!< Page directory. */
     /**@{*/
     struct semaphore sem;
+    struct list child_processes;
+    struct thread * parent;
 #endif
 
     /*! Owned by thread.c. */

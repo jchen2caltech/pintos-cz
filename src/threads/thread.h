@@ -11,6 +11,8 @@
 #include <stdint.h>
 #include <filesys/file.h>
 
+typedef tid_t pid_t;
+
 /*! States in a thread's life cycle. */
 enum thread_status {
     THREAD_RUNNING,     /*!< Running thread. */

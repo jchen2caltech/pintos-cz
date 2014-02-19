@@ -5,9 +5,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <list.h>
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
+#include "userprog/syscall.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -89,18 +91,39 @@ static void start_process(void *file_name_) {
     This function will be implemented in problem 2-2.  For now, it does
     nothing. */
 int process_wait(tid_t child_tid) {
-    while (true)
-         continue;
-    return -1;
+    return wait(child_tid);
 }
 
 /*! Free the current process's resources. */
 void process_exit(void) {
+    struct thread *pt;
+    struct thread_return_stat *cs, *trs;
+    struct list_elem *ce;
     struct thread *cur = thread_current();
     uint32_t *pd;
+    enum intr_level old_level;
 
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
+    trs = NULL;
+    pt = cur->parent;
+    if (pt) {
+        old_level = intr_disable();
+        ce = list_begin(&pt->child_returnstats);
+        while (!trs && ce->next && ce->next->next) {
+            cs = list_entry(ce, struct thread_return_stat, elem);
+            if (cs->pid == cur->tid)
+                trs = cs;
+            ce = list_next(ce);
+        }
+        if (trs) {
+            trs->stat = -1;
+            sema_up(&trs->sem);
+        }
+        list_remove(&cur->childelem);
+        intr_set_level(old_level);
+    }
+        
     pd = cur->pagedir;
     if (pd != NULL) {
         /* Correct ordering here is crucial.  We must set

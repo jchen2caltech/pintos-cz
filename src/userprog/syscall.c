@@ -1,5 +1,6 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
+#include <string.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
@@ -11,19 +12,6 @@
 #include "userprog/pagedir.h"
 
 static void syscall_handler(struct intr_frame *);
-void halt(void);
-void exit(int status);
-pid_t exec(const char *cmd_line);
-int wait(pid_t pid);
-bool create(const char *file, unsigned initial_size);
-bool remove(const char *file);
-int open(const char *file);
-int filesize(uint32_t fd);
-int read(uint32_t fd, void *buffer, unsigned size);
-int write(uint32_t fd, const void *buffer, unsigned size);
-void seek(uint32_t fd, unsigned position);
-unsigned tell(uint32_t fd);
-void close(uint32_t fd);
 bool checkva(const void* va);
 struct f_info *findfile(uint32_t fd);
 
@@ -32,11 +20,11 @@ void syscall_init(void) {
 }
 
 static void syscall_handler(struct intr_frame *f UNUSED) {
-    printf("system call!\n");
-    thread_exit();
+    halt();
 }
 
 void halt(void) {
+    printf("shutting down\n");
     shutdown_power_off();
 }
 
@@ -70,6 +58,7 @@ void exit(int status) {
         ct->parent = NULL;
         ce = list_next(ce);
     }
+    t->parent = NULL;
     intr_set_level(old_level);
     thread_exit();
 }
@@ -135,7 +124,7 @@ int open(const char *file) {
        exit(-1);
     
     //Lock?!
-    struct file* f_open = filesys_open(f_name);
+    struct file* f_open = filesys_open(file);
     //Unlock?!
     
     if (f_open == NULL) {

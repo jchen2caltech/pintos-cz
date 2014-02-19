@@ -42,7 +42,7 @@ tid_t process_execute(const char *file_name) {
     strlcpy(fn_copy, file_name, PGSIZE);
     
      //Varaibles to extract the program name
-    char prog_name[14];
+    char prog_name[16];
     get_prog_name(fn_copy, prog_name);
 
     /* Create a new thread to execute FILE_NAME. */
@@ -215,7 +215,7 @@ bool load(const char *cmdline, void (**eip) (void), void **esp) {
         goto done;
     process_activate();
     
-    char prog_name[PGSIZE];
+    char prog_name[16];
     get_prog_name(cmdline, prog_name);
 
     /* Open executable file. */
@@ -480,7 +480,16 @@ static bool arg_pass(const char*cmdline, void **esp) {
  
    char* p_argv_begin = stack_top;
    int count_limit;
-   if ((int)stack_top % 4 == 3) count_limit = 1; else count_limit = 2;
+   
+   if ((int)stack_top % 4 == 3) {
+       count_limit = 1; 
+   } else if ((int)stack_top % 4 == 0) {
+       count_limit = 0;
+   } else if ((int)stack_top % 4 == 1) {
+       count_limit = 3;    
+   } else {
+       count_limit = 2;   
+   }
    while(count_limit > 0){
        if ((int)*esp - (int)stack_top + 1 > PGSIZE)
            return false;
@@ -506,6 +515,9 @@ static bool arg_pass(const char*cmdline, void **esp) {
    if (!push4(&stack_top, (void*)(stack_top), esp))
        return false;
    
+   if (!push4(&stack_top, NULL, esp))
+       return false;
+   
    if (!push4(&stack_top, (void*)(argc), esp))
        return false;
     
@@ -520,7 +532,7 @@ static bool push4(char** stack_ptr, void* val, void** esp) {
     if ((int)*esp - (int)*stack_ptr + 4 > PGSIZE)
         return false;
     *stack_ptr -= 4;
-    *(void **) *stack_ptr = val;
+    *(*stack_ptr) = val;
     return true;
 }
 
@@ -530,6 +542,4 @@ static void get_prog_name(const char* cmdline, char* prog_name){
         strlcpy(prog_name, cmdline, first_space - cmdline + 1);
     else
         strlcpy(prog_name, cmdline, strlen(cmdline) + 1);
-    
-    printf("%s\n", prog_name);
 }

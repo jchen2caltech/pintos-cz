@@ -538,6 +538,9 @@ static void init_thread(struct thread *t, const char *name, int priority) {
     list_init(&t->child_processes);
     t->parent = thread_current();
     list_push_back(&(t->parent->child_processes), &t->elem);
+    list_init(&t->f_lst);
+    t->f_count = 2;
+    t->fd_max = 1;
 #endif
 
     old_level = intr_disable();

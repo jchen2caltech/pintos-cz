@@ -9,6 +9,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include <filesys/file.h>
 
 /*! States in a thread's life cycle. */
 enum thread_status {
@@ -120,6 +121,9 @@ struct thread {
     struct semaphore sem;
     struct list child_processes;
     struct thread * parent;
+    struct list f_lst;
+    uint32_t f_count;
+    uint32_t fd_max;
 #endif
 
     /*! Owned by thread.c. */
@@ -127,6 +131,20 @@ struct thread {
     unsigned magic;                     /* Detects stack overflow. */
     /**@}*/
 };
+
+
+/*! The file info struct for each file accessed by a process */
+struct f_info {
+    // The file object
+    file* f;
+    // The position of current access
+    off_t pos;
+    // List element for the list of all files of a process
+    struct list_elem elem;
+    // file descriptor
+    uint32_t fd;
+    
+}
 
 /*! If false (default), use round-robin scheduler.
     If true, use multi-level feedback queue scheduler.

@@ -117,8 +117,11 @@ void sema_up(struct semaphore *sema) {
         list_remove(&t->elem);
         thread_unblock(t);
         if (t->priority > thread_get_priority() ||
-            t->donated_priority > thread_get_priority())
-            thread_yield();
+            t->donated_priority > thread_get_priority()) {
+            if (!intr_context())
+                thread_yield();
+            else
+                intr_yield_on_return();
     }
     intr_set_level(old_level);
 }
@@ -303,7 +306,7 @@ bool lock_held_by_current_thread(const struct lock *lock) {
 
     return lock->holder == thread_current();
 }
-
+
 /*! One semaphore in a list. */
 struct semaphore_elem {
     struct list_elem elem;              /*!< List element. */

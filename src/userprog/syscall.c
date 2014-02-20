@@ -143,7 +143,7 @@ void exit(int status) {
             sema_up(&trs->sem);
         }
         list_remove(&t->childelem);
-    } 
+    }
     ce = list_begin(&t->child_processes);
     while (ce->next && ce->next->next) {
         ct = list_entry(ce, struct thread, childelem);
@@ -156,34 +156,16 @@ void exit(int status) {
 }
 
 pid_t exec(const char *cmd_line) {
-
+    pid_t child = process_execute(cmd_line);
+    thread_return_stat *ts = list_entry(list_back(thread_current()->\
+                                        child_returnstats), 
+                                        thread_return_stat, elem);
+    sema_down(&ts->elem);
+    return (ts->stat == -1 ? -1 : child);
 }
 
 int wait(pid_t pid) {
-    struct thread *ct;
-    struct list_elem *ce;
-    struct thread_return_stat *cs, *trs;
-    int status;
-    enum intr_level old_level;
-
-    trs = NULL;
-    ct = thread_current();
-    old_level = intr_disable();
-    ce = list_begin(&ct->child_returnstats);
-    while (!trs && ce->next && ce->next->next) {
-        cs = list_entry(ce, struct thread_return_stat, elem);
-        if (cs->pid == pid)
-            trs = cs;
-        ce = list_next(ce);
-    }
-    if (!trs)
-        return -1;
-    sema_down(&trs->sem);
-    status = trs->stat;
-    list_remove(&trs->elem);
-    free(trs);
-    intr_set_level(old_level);
-    return trs->stat;
+    return process_wait(pid);
 }
 
 bool create(const char *f_name, unsigned initial_size) {

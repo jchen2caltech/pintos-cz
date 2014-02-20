@@ -59,6 +59,10 @@ static void start_process(void *file_name_) {
     char *file_name = file_name_;
     struct intr_frame if_;
     bool success;
+    struct thread *pt, *ct;
+    struct thread_return_stat *cs, *trs;
+    struct list_elem *ce;
+    enum intr_level old_level;
 
     /* Initialize interrupt frame and load executable. */
     memset(&if_, 0, sizeof(if_));
@@ -69,6 +73,22 @@ static void start_process(void *file_name_) {
 
     /* If load failed, quit. */
     palloc_free_page(file_name);
+    ct = thread_current();
+    pt = ct->parent;
+    trs = NULL;
+    old_level = intr_disable();
+    ce = list_begin(&pt->child_returnstats);
+    while (!trs && ce->next && ce->next->next) {
+        cs = list_entry(ce, struct thread_return_stat, elem);
+        if (cs->pid == ct->tid)
+            trs = cs;
+        ce = list_next(ce);
+    }
+    if (trs) {
+        trs->stat = (success ? 0 : -1);
+        sema_up(&trs->sem);
+    }
+    intr_set_level(old_level);
     if (!success) 
         thread_exit();
 
@@ -91,7 +111,30 @@ static void start_process(void *file_name_) {
     This function will be implemented in problem 2-2.  For now, it does
     nothing. */
 int process_wait(tid_t child_tid) {
-    return wait(child_tid);
+    struct thread *ct;
+    struct list_elem *ce;
+    struct thread_return_stat *cs, *trs;
+    int status;
+    enum intr_level old_level;
+
+    trs = NULL;
+    ct = thread_current();
+    old_level = intr_disable();
+    ce = list_begin(&ct->child_returnstats);
+    while (!trs && ce->next && ce->next->next) {
+        cs = list_entry(ce, struct thread_return_stat, elem);
+        if (cs->pid == pid)
+            trs = cs;
+        ce = list_next(ce);
+    }
+    if (!trs)
+        return -1;
+    sema_down(&trs->sem);
+    status = trs->stat;
+    list_remove(&trs->elem);
+    free(trs);
+    intr_set_level(old_level);
+    return (tid_t)trs->stat;
 }
 
 /*! Free the current process's resources. */

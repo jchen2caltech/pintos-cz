@@ -32,6 +32,7 @@ static void get_prog_name(const char* cmdline, char* prog_name);
     cannot be created. */
 tid_t process_execute(const char *file_name) {
     char *fn_copy;
+    struct thread_return_status *trs;
     tid_t tid;
     /* Make a copy of FILE_NAME.
        Otherwise there's a race between the caller and load(). */
@@ -46,11 +47,16 @@ tid_t process_execute(const char *file_name) {
 
     /* Create a new thread to execute FILE_NAME. */
 
-    tid = thread_create2(prog_name, PRI_MAX, start_process, fn_copy, \
-                        THREAD_PROCESS);
+    tid = thread_create(prog_name, PRI_MAX, start_process, fn_copy);
+    trs = thread_findchild(tid);
 
     if (tid == TID_ERROR)
         palloc_free_page(fn_copy); 
+    else 
+        sema_down(&trs->sem);
+
+    if (tid != TID_ERROR && trs->stat == -1)
+        tid = TID_ERROR;
     return tid;
 }
 
@@ -60,10 +66,8 @@ static void start_process(void *file_name_) {
     char *file_name = file_name_;
     struct intr_frame if_;
     bool success;
-    struct thread *pt, *ct;
-    struct thread_return_stat *cs, *trs;
-    struct list_elem *ce;
-    enum intr_level old_level;
+    struct thread *cur;
+    struct thread_return_stat *trs;
 
     
     /* Initialize interrupt frame and load executable. */
@@ -76,26 +80,14 @@ static void start_process(void *file_name_) {
     /* If load failed, quit. */
 
     palloc_free_page(file_name);
-    ct = thread_current();
-    pt = ct->parent;
-    trs = NULL;
-    old_level = intr_disable();
-    ce = list_begin(&pt->child_returnstats);
-    while (!trs && ce->next && ce->next->next) {
-        cs = list_entry(ce, struct thread_return_stat, elem);
-        if (cs->pid == ct->tid)
-            trs = cs;
-        ce = list_next(ce);
+    cur = thread_current();
+    if (success) {
+        cur->trs = success;
+        sema_up(&cur->trs->sem);
     }
-
-    if (trs) {
-        trs->stat = (success ? 0 : -1);
-        sema_up(&trs->sem);
-    }
-
-    intr_set_level(old_level);
-    if (!success) 
+    else {
         thread_exit();
+    }
 
     /* Start the user process by simulating a return from an
        interrupt, implemented by intr_exit (in
@@ -116,37 +108,27 @@ static void start_process(void *file_name_) {
     This function will be implemented in problem 2-2.  For now, it does
     nothing. */
 int process_wait(tid_t child_tid) {
-    struct thread *ct;
-    struct list_elem *ce;
-    struct thread_return_stat *cs, *trs;
-    int status;
+    struct thread *cur;
+    struct thread_return_status *trs;
     enum intr_level old_level;
+    int status;
 
-    trs = NULL;
-    ct = thread_current();
-    old_level = intr_disable();
-    ce = list_begin(&ct->child_returnstats);
-    while (!trs && ce->next && ce->next->next) {
-        cs = list_entry(ce, struct thread_return_stat, elem);
-        if (cs->pid == child_tid)
-            trs = cs;
-        ce = list_next(ce);
-    }
+    trs = thread_findchild(child_tid);
+    cur = thread_current();
     if (!trs)
         return -1;
+    old_level = intr_disable();
     sema_down(&trs->sem);
     status = trs->stat;
     list_remove(&trs->elem);
     free(trs);
     intr_set_level(old_level);
-    return (tid_t)trs->stat;
+    return status;
 }
 
 /*! Free the current process's resources. */
 void process_exit(void) {
-    struct thread *pt;
-    struct thread_return_stat *cs, *trs;
-    struct list_elem *ce;
+    struct thread_return_status *trs;
     struct thread *cur = thread_current();
     uint32_t *pd;
     enum intr_level old_level;
@@ -154,24 +136,16 @@ void process_exit(void) {
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
     trs = NULL;
-    pt = cur->parent;
-    if (pt) {
+    if (cur->parent) {
         old_level = intr_disable();
-        ce = list_begin(&pt->child_returnstats);
-        while (!trs && ce->next && ce->next->next) {
-            cs = list_entry(ce, struct thread_return_stat, elem);
-            if (cs->pid == cur->tid)
-                trs = cs;
-            ce = list_next(ce);
-        }
-        if (trs) {
-            trs->stat = -1;
-            sema_up(&trs->sem);
-        }
+        cur->trs->stat = -1;
         list_remove(&cur->childelem);
         intr_set_level(old_level);
-        printf("%s: exit(%d)\n", thread_current()->name, -1);
     }
+
+    printf("%s: exit(%d)\n", cur->name, cur->trs->stat);
+    intr_set_level(old_level);
+    sema_up(&cur->trs->sem);
         
     pd = cur->pagedir;
     if (pd != NULL) {

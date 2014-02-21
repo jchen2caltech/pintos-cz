@@ -91,9 +91,12 @@ typedef int pid_t;
    ready state is on the run queue, whereas only a thread in the
    blocked state is on a semaphore wait list.
 */
-enum thread_type {
-    THREAD_KERNEL,
-    THREAD_PROCESS,
+
+struct thread_return_status {
+    pid_t pid;
+    struct semaphore sem;
+    int stat;
+    struct list_elem elem;
 };
 
 struct thread {
@@ -120,34 +123,24 @@ struct thread {
     int64_t wakeup_time;                /*!< Wake up time of the thread */
 
     struct list locks;                  /*!< List of locks acquired by the thread */
-
-    enum thread_type type;
 #ifdef USERPROG
     /*! Owned by userprog/process.c. */
     /**@{*/
     uint32_t *pagedir;                  /*!< Page directory. */
     /**@{*/
-#endif
 
     struct list child_returnstats;
-    struct list child_processes;
-    struct list_elem childelem;
+    struct thread_return_stat *trs;
     struct thread * parent;
     struct list f_lst;
     uint32_t f_count;
     uint32_t fd_max;
 
+#endif
     /*! Owned by thread.c. */
     /**@{*/
     unsigned magic;                     /* Detects stack overflow. */
     /**@}*/
-};
-
-struct thread_return_stat{
-    pid_t pid;
-    struct semaphore sem;
-    int stat;
-    struct list_elem elem;
 };
 
 /*! The file info struct for each file accessed by a process */
@@ -162,8 +155,6 @@ struct f_info {
     uint32_t fd;
     
 };
-
-    struct lock filesys_lock;
 
 /*! If false (default), use round-robin scheduler.
     If true, use multi-level feedback queue scheduler.
@@ -185,6 +176,8 @@ void thread_unblock(struct thread *);
 struct thread *thread_current (void);
 tid_t thread_tid(void);
 const char *thread_name(void);
+
+struct thread_return_status *thread_findchild(pid_t pid);
 
 void thread_exit(void) NO_RETURN;
 void thread_yield(void);
@@ -210,9 +203,6 @@ int thread_get_load_avg(void);
 static void thread_update_recent_cpu(struct thread* t, void *args UNUSED);
 static void update_load_avg(void);
 static void thread_update_priority(struct thread* t, void *args UNUSED);
-tid_t thread_create2(const char *name, int priority, thread_func *function,
-                    void *aux, enum thread_type type); 
-struct lock* fsys_lock(void);
 
 
 #endif /* threads/thread.h */

@@ -181,13 +181,9 @@ void thread_print_stats(void) {
     The code provided sets the new thread's `priority' member to PRIORITY, but
     no actual priority scheduling is implemented.  Priority scheduling is the
     goal of Problem 1-3. */
-tid_t thread_create(const char *name, int priority, thread_func *function, 
-                    void *aux) {
-    return thread_create2(name, priority, function, aux, THREAD_KERNEL);
-}
 
-tid_t thread_create2(const char *name, int priority, thread_func *function,
-                    void *aux, enum thread_type type) {
+tid_t thread_create(const char *name, int priority, thread_func *function,
+                    void *aux) {
     struct thread *t;
     struct kernel_thread_frame *kf;
     struct switch_entry_frame *ef;
@@ -204,7 +200,6 @@ tid_t thread_create2(const char *name, int priority, thread_func *function,
     /* Initialize thread. */
     init_thread(t, name, priority);
     tid = t->tid = allocate_tid();
-    t->type = type;
 
     /* Stack frame for kernel_thread(). */
     kf = alloc_frame(t, sizeof *kf);
@@ -288,15 +283,45 @@ tid_t thread_tid(void) {
     return thread_current()->tid;
 }
 
+struct thread_return_status *thread_findchild(pid_t pid) {
+    struct thread *t, *ct;
+    struct list_elem *ce;
+    struct thread_return_status *trs = NULL;
+    struct thread_return_status *cs;
+    enum intr_level old_level;
+    
+    t = thread_current();
+    old_level = intr_disable();
+    ce = list_begin(&t->child_returnstats);
+    while (ce->next && ce->next->next && !trs) {
+        cs = list_entry(ce, struct thread_return_status, elem);
+        if (cs->pid == pid)
+            trs = cs;
+        ce = list_next(ce);
+    }
+    intr_set_level(old_level);
+    return trs;
+}
+
 /*! Deschedules the current thread and destroys it.  Never
     returns to the caller. */
 void thread_exit(void) {
     struct thread *t;
+    struct list_elem *ce;
+    struct f_info *cf;
 
     ASSERT(!intr_context());
 
 #ifdef USERPROG
     process_exit();
+    t = thread_current();
+    while (!list_empty(&t->f_lst)) {
+        ce = list_pop_front(&t->f_lst);
+        cf = list_entry(ce, struct f_info, elem);
+        close(cf->f);
+        free(cf);
+    }
+
 #endif
 
 
@@ -508,7 +533,7 @@ static bool is_thread(struct thread *t) {
 /*! Does basic initialization of T as a blocked thread named NAME. */
 static void init_thread(struct thread *t, const char *name, int priority) {
     enum intr_level old_level;
-    struct thread_return_stat *trs;
+    struct thread_return_status *trs;
 
     ASSERT(t != NULL);
     ASSERT(PRI_MIN <= priority && priority <= PRI_MAX);
@@ -540,25 +565,22 @@ static void init_thread(struct thread *t, const char *name, int priority) {
     t->waiting_lock = NULL;
     old_level = intr_disable();
 #ifdef USERPROG
+
     list_init(&t->child_returnstats);
-    list_init(&t->child_processes);
     if (t == initial_thread) {
         t->parent = NULL;
     } else {
         t->parent = thread_current();
-        trs = malloc(sizeof(struct thread_return_stat));
+        trs = malloc(sizeof(struct thread_return_status));
         trs->pid = (pid_t)t->tid;
         sema_init(&trs->sem, 0);
+        t->trs = trs;
         list_push_back(&(t->parent->child_returnstats), &trs->elem);
-        list_push_back(&(t->parent->child_processes), &t->childelem);
     }
     
     list_init(&t->f_lst);
     t->f_count = 2;
-    t->fd_max = 1;
-    
-    
-    
+    t->fd_max = 1;    
 
 #endif
         

@@ -13,6 +13,8 @@
 #include "devices/shutdown.h"
 #include "userprog/pagedir.h"
 
+staitic struct lock filesys_lock;
+
 static void syscall_handler(struct intr_frame *);
 bool checkva(const void* va);
 struct f_info *findfile(uint32_t fd);
@@ -20,6 +22,7 @@ static uint32_t read4(struct intr_frame * f, int offset);
 
 
 void syscall_init(void) {
+    lock_init(&filesys_lock);
     intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -123,50 +126,18 @@ void halt(void) {
 }
 
 void exit(int status) {
-    struct thread *t, *pt, *ct;
-    enum intr_level old_level;
-    struct list_elem *ce;
-    struct thread_return_stat *cs, *trs;
+    struct thread *t;
 
     t = thread_current();
-    if (t->type == THREAD_PROCESS) {
-        pt = t->parent;
-        trs = NULL;
-        old_level = intr_disable();
-        if (pt) {
-	    ce = list_begin(&pt->child_returnstats);
-	    while (!trs && ce->next && ce->next->next) {
-	        cs = list_entry(ce, struct thread_return_stat, elem);
-	        if (cs->pid == t->tid)
-	            trs = cs;
-	        ce = list_next(ce);
-	    }
-	    if (trs) {
-	        trs->stat = status;
-	        sema_up(&trs->sem);
-	    }
-	    list_remove(&t->childelem);
-        }
-        ce = list_begin(&t->child_processes);
-        while (ce->next && ce->next->next) {
-	    ct = list_entry(ce, struct thread, childelem);
-	    ct->parent = NULL;
-	    ce = list_next(ce);
-        }
-        t->parent = NULL;
-        intr_set_level(old_level);
-        printf("%s: exit(%d)\n", t->name, status);
-    }
+    t->trs->stat = status;
+    t->parent = NULL;
     thread_exit();
 }
 
 pid_t exec(const char *cmd_line) {
-    pid_t child = process_execute(cmd_line);
-    struct thread_return_stat *ts = list_entry(list_back(&thread_current()->\  
-                                               child_returnstats), struct \
-                                               thread_return_stat, elem);
-    sema_down(&ts->sem);
-    return (ts->stat == -1 ? -1 : child);
+    if (checkva(cmd_line))
+        return process_execute(cmd_line);
+    exit(-1);
 }
 
 int wait(pid_t pid) {
@@ -177,16 +148,11 @@ bool create(const char *f_name, unsigned initial_size) {
     if (!checkva(f_name))
         exit(-1);
     //printf("\n\nHello\n\n");
-    //lock_acquire(&filesys_lock);
+    lock_acquire(&filesys_lock);
     //printf("\n\ncreating file name:[%s]\n", f_name);
     //printf("And the size is %d\n\n\n", initial_size);
-    printf("\n\n\nHello\n\n\n");
     bool flag = filesys_create(f_name, (off_t) initial_size);
-    if (flag)
-        printf("\n\n123\n\n");
-    else
-        printf("\n\n234\n\n");
-    //lock_release(&filesys_lock);
+    lock_release(&filesys_lock);
 
 
     return flag;
@@ -200,8 +166,6 @@ bool remove(const char *f_name) {
     bool flag = filesys_remove(f_name);
     lock_release(&filesys_lock);
     return flag;
-    
-
 }
 
 int open(const char *f_name) {
@@ -209,7 +173,7 @@ int open(const char *f_name) {
     struct f_info *f;
     uint32_t fd;
 
-    if (!checkva(f_name) || !(checkva(f_name + strlen(f_name))))
+    if (!checkva(f_name))
        exit(-1);
     
     lock_acquire(&filesys_lock);

@@ -145,7 +145,7 @@ void process_exit(void) {
     if (cur->f_exe){
         file_allow_write(cur->f_exe);
         file_close(cur->f_exe);
-        free(cur->f_exe);
+        free(cur);
         cur->f_exe = NULL;
     }
     pd = cur->pagedir;

@@ -180,6 +180,19 @@ filesystem and return the read_size or write_size.
 >> for a system call that only copies 2 bytes of data?  Is there room
 >> for improvement in these numbers, and how much?
 
+For our implementation, given a full page of data we will always have 
+two inspections of the page table. Because for our implementation,
+we will check both the head pointer and the end pointer (head + size) 
+of data, with pagedir_get_page(). Similarly, for 2 bytes of data,
+we all do the same thing, because we always check the validity of the
+head and end address of given pointer and size.
+
+Another better implementation will in fact require 0 pagedir_get_page()
+calls. This approach will simply read and write the data until a page_fault
+occurs, without checking the address. And this approach seems more time
+efficient, as the approch will continue to read or write, until an illegal
+address occurs.
+
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
 

@@ -317,6 +317,7 @@ void thread_exit(void) {
     struct thread *t;
     struct list_elem *ce;
     struct f_info *cf;
+    struct thread_return_status *ctrs;
 
     ASSERT(!intr_context());
 
@@ -328,6 +329,11 @@ void thread_exit(void) {
         cf = list_entry(ce, struct f_info, elem);
         file_close(cf->f);
         free(cf);
+    }
+    while (!list_empty(&t->child_returnstats)) {
+        ce = list_pop_front(&t->child_returnstats);
+        ctrs = list_entry(ce, struct thread_return_status, elem);
+        free(ctrs);
     }
 
 #endif

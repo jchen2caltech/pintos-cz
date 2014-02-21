@@ -133,7 +133,6 @@ int process_wait(tid_t child_tid) {
     free(trs);
     intr_set_level(old_level);
     return (tid_t)trs->stat;
->>>>>>> aa36f0c65282715589f0d9ced39edb5b518d3ca3
 }
 
 /*! Free the current process's resources. */

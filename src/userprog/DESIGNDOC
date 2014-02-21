@@ -250,6 +250,26 @@ address occurs.
 >> B10: What advantages or disadvantages can you see to your design
 >> for file descriptors?
 
+Advantage of our design for file descriptors is that for processes
+accessing a small number of files, the space complexity for storing
+these f_info is small, compared creating an array of 128 pointers.
+And in most cases, as processes do not need as large as 128 files
+opening at the same time, the advantage of space complexity in our
+impelementation is obvious ( - as the memory usable by Pintos is scarce).
+Moreover, when opening up a new file, we will just assign fd_max + 1 to
+this file, which is also time-efficient. 
+
+However, there are two disadvantages in this design. Firstly, for finding
+the f_info with a given fd is not time-efficient, because we requires
+iterate through the entire list of f_info and check each f_info->fd. 
+
+Secondly, as our fd is uint32_t and for each file opening up, fd_max
+increments (and it never decrements). Although this design efficiently
+avoids fd-conflicts (i.e. assiging same fd to the same file), it does
+causes troubles if a process opens up more than 2^32 files since its
+creation. But as 2^32 is a really big number, this should be rarely
+the case.
+
 >> B11: The default tid_t to pid_t mapping is the identity mapping.
 >> If you changed it, what advantages are there to your approach?
 

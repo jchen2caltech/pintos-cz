@@ -47,7 +47,7 @@ tid_t process_execute(const char *file_name) {
 
     /* Create a new thread to execute FILE_NAME. */
 
-    tid = thread_create2(prog_name, PRI_MAX, start_process, fn_copy, \
+    tid = thread_create2(prog_name, PRI_DEFAULT, start_process, fn_copy, \
                         THREAD_PROCESS);
 
     if (tid == TID_ERROR)

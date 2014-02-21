@@ -39,6 +39,7 @@ static struct thread *initial_thread;
 
 /*! Lock used by allocate_tid(). */
 static struct lock tid_lock;
+static struct lock filesys_lock;
 
 /*! Stack frame for kernel_thread(). */
 struct kernel_thread_frame {
@@ -75,6 +76,10 @@ static tid_t allocate_tid(void);
 
 /*! The global load average of the system*/
 static int32_t load_avg;
+
+struct lock *fsys_lock(void){
+    return &filesys_lock;
+}
 
 /*! Initializes the threading system by transforming the code
     that's currently running into a thread.  This can't work in
@@ -180,8 +185,13 @@ void thread_print_stats(void) {
     The code provided sets the new thread's `priority' member to PRIORITY, but
     no actual priority scheduling is implemented.  Priority scheduling is the
     goal of Problem 1-3. */
-tid_t thread_create(const char *name, int priority, thread_func *function,
+tid_t thread_create(const char *name, int priority, thread_func *function, 
                     void *aux) {
+    return thread_create2(name, priority, function, aux, THREAD_KERNEL);
+}
+
+tid_t thread_create2(const char *name, int priority, thread_func *function,
+                    void *aux, enum thread_type type) {
     struct thread *t;
     struct kernel_thread_frame *kf;
     struct switch_entry_frame *ef;
@@ -198,6 +208,7 @@ tid_t thread_create(const char *name, int priority, thread_func *function,
     /* Initialize thread. */
     init_thread(t, name, priority);
     tid = t->tid = allocate_tid();
+    t->type = type;
 
     /* Stack frame for kernel_thread(). */
     kf = alloc_frame(t, sizeof *kf);

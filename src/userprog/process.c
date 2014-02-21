@@ -142,9 +142,11 @@ void process_exit(void) {
     intr_set_level(old_level);
     sema_up(&cur->trs->sem);
     
-    if ((cur->f_exe) != NULL){
+    if (cur->f_exe){
         file_allow_write(cur->f_exe);
         file_close(cur->f_exe);
+        free(cur->f_exe);
+        cur->f_exe = NULL;
     }
     pd = cur->pagedir;
     if (pd != NULL) {

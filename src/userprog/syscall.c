@@ -221,7 +221,6 @@ int read(uint32_t fd, void *buffer, unsigned size) {
         exit(-1);
     
     int read_size = 0;
-    
     if (fd == STDIN_FILENO) {
         unsigned i;
         for (i = 0; i < size; i++){
@@ -240,7 +239,6 @@ int read(uint32_t fd, void *buffer, unsigned size) {
         lock_release(&filesys_lock);
         
     }
-    
     return read_size;
 
 }

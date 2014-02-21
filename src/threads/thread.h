@@ -114,6 +114,7 @@ struct thread {
     /*! Shared between thread.c and synch.c. */
     /**@{*/
     struct lock * waiting_lock;         /*!< The lock that the thread is waiting on. */
+
     /**@}*/
 
     int64_t wakeup_time;                /*!< Wake up time of the thread */
@@ -161,6 +162,8 @@ struct f_info {
     uint32_t fd;
     
 };
+
+    struct lock filesys_lock;
 
 /*! If false (default), use round-robin scheduler.
     If true, use multi-level feedback queue scheduler.

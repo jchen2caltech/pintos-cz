@@ -39,7 +39,7 @@ static struct thread *initial_thread;
 
 /*! Lock used by allocate_tid(). */
 static struct lock tid_lock;
-static struct lock filesys_lock;
+
 
 /*! Stack frame for kernel_thread(). */
 struct kernel_thread_frame {
@@ -76,10 +76,6 @@ static tid_t allocate_tid(void);
 
 /*! The global load average of the system*/
 static int32_t load_avg;
-
-struct lock *fsys_lock(void){
-    return &filesys_lock;
-}
 
 /*! Initializes the threading system by transforming the code
     that's currently running into a thread.  This can't work in

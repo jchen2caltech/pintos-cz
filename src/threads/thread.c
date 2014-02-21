@@ -90,6 +90,7 @@ static int32_t load_avg;
 void thread_init(void) {
     ASSERT(intr_get_level() == INTR_OFF);
 
+    printf("\n\n\n\nhello!!!\n\n\n\n\n");
     lock_init(&tid_lock);
     list_init(&ready_list);
     list_init(&all_list);
@@ -507,7 +508,6 @@ static void init_thread(struct thread *t, const char *name, int priority) {
     ASSERT(t != NULL);
     ASSERT(PRI_MIN <= priority && priority <= PRI_MAX);
     ASSERT(name != NULL);
-
     memset(t, 0, sizeof *t);
     t->status = THREAD_BLOCKED;
     strlcpy(t->name, name, sizeof t->name);
@@ -533,23 +533,31 @@ static void init_thread(struct thread *t, const char *name, int priority) {
     t->magic = THREAD_MAGIC;
     list_init(&t->locks); 
     t->waiting_lock = NULL;
-
+    old_level = intr_disable();
 #ifdef USERPROG
     list_init(&t->child_returnstats);
     list_init(&t->child_processes);
-    t->parent = thread_current();
+    if (t == initial_thread) {
+        t->parent = NULL;
+    } else {
+        t->parent = thread_current();
+        trs = malloc(sizeof(struct thread_return_stat));
+        trs->pid = (pid_t)t->tid;
+        sema_init(&trs->sem, 0);
+        list_push_back(&(t->parent->child_returnstats), &trs->elem);
+        list_push_back(&(t->parent->child_processes), &t->childelem);
+    }
+    
     list_init(&t->f_lst);
     t->f_count = 2;
     t->fd_max = 1;
-    trs = malloc(sizeof(struct thread_return_stat));
-    trs->pid = (pid_t)t->tid;
-    sema_init(&trs->sem, 0);
-    list_push_back(&(t->parent->child_returnstats), &trs->elem);
-    list_push_back(&(t->parent->child_processes), &t->childelem);
+    
+    
+    
 
 #endif
-
-    old_level = intr_disable();
+        
+    
     list_push_back(&all_list, &t->allelem);
     intr_set_level(old_level);
 }

@@ -504,30 +504,45 @@ static bool install_page(void *upage, void *kpage, bool writable) {
 /*! Parses the arguments into tokens;
     then pushes argv, argc, and fake return address in reverse order */
 static bool arg_pass(const char*cmdline, void **esp) {
+   // Pointer to top of the stack
    char* stack_top = *esp;
+   
+   // Variables for argument tokenization
    char* delimiters = " ";
    char* curr;
    char* word_begin;
    char* word_end;
    size_t word_len;
    
-   
+   // Set the pointer to the end of cmdline, as we are scanning
+   // from the back
    curr = cmdline + strlen(cmdline);
    while(curr >= cmdline)
    {
+       // If the current curr is not the delimiter then curr--
        while(curr>=cmdline && (strrchr(delimiters, *curr) != NULL 
            || *curr =='\0'))
            curr--;
+       // As we found the delimiter, word_end is cur + 1
        word_end = curr + 1;
+       
+       // If we found another delimeter, then cur + 1 is word_begin
        while(curr>=cmdline && strrchr(delimiters, *curr) == NULL)
            curr--;
        word_begin = curr + 1;
+       
+       // Get word length
        word_len = word_end - word_begin;
        
+       // Push the word onto stack
        if ((int)*esp - (int)stack_top + word_len + 1 > PGSIZE)
            return false;
        strlcpy(stack_top - word_len - 1, word_begin, word_len + 1);
+       
+       // Add null terminator
        *(stack_top - 1) = '\0';
+       
+       // Update stack_top
        stack_top -= (word_len + 1);
        
    }
@@ -535,6 +550,7 @@ static bool arg_pass(const char*cmdline, void **esp) {
    char* p_argv_begin = stack_top;
    int count_limit;
    
+   // Add word align
    if ((int)stack_top % 4 == 3) {
        count_limit = 1; 
    } else if ((int)stack_top % 4 == 0) {
@@ -556,6 +572,8 @@ static bool arg_pass(const char*cmdline, void **esp) {
    if (!push4(&stack_top, NULL, esp))
        return false;
    
+   // Scan from the base of the stack, to find the address of each arg
+   // Push the address to stack, then increment argc
    char *p = PHYS_BASE - 1;
    int argc = 0;
    while (p>=p_argv_begin){
@@ -568,32 +586,46 @@ static bool arg_pass(const char*cmdline, void **esp) {
       argc++;
        
    }
+   
+   // Push the address of argv
    if (!push4(&stack_top, (void*)(stack_top), esp))
        return false;
    
+   // Push argc
    if (!push4(&stack_top, (void*)(argc), esp))
        return false;
-
-    
+   
+   // Push fake return address
    if (!push4(&stack_top, NULL, esp))
        return false;
    
+   // Update esp
    *esp = stack_top;
    return true;
 }
 
+/*! Push 4 bytes from val to the stack */
 static bool push4(char** stack_ptr, void* val, void** esp) {
+    // First check whether pushing 4 bytes will overflow
     if ((int)*esp - (int)*stack_ptr + 4 > PGSIZE)
         return false;
+    
+    // Update stack pointer
     *stack_ptr -= 4;
+    // Push value to stack
     *((void **)(*stack_ptr)) = val;
     return true;
 }
 
+/*! Give a cmdline, return the program name */
 static void get_prog_name(const char* cmdline, char* prog_name){
+    // First the first occurence of space
     char* first_space = strchr(cmdline, ' ');
+    
     if (first_space != NULL)
+        // If found space, then copy all chars before the first occurence
         strlcpy(prog_name, cmdline, first_space - cmdline + 1);
     else
+        // Otherwise, the entire cmdline is prog_name
         strlcpy(prog_name, cmdline, strlen(cmdline) + 1);
 }

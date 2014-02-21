@@ -33,6 +33,7 @@ static void get_prog_name(const char* cmdline, char* prog_name);
 tid_t process_execute(const char *file_name) {
     char *fn_copy;
     struct thread_return_status *trs;
+    char prog_name[16];
     tid_t tid;
     /* Make a copy of FILE_NAME.
        Otherwise there's a race between the caller and load(). */
@@ -40,16 +41,14 @@ tid_t process_execute(const char *file_name) {
     if (fn_copy == NULL)
         return TID_ERROR;
     strlcpy(fn_copy, file_name, PGSIZE);
-    
+   
      //Varaibles to extract the program name
-    char prog_name[16];
     get_prog_name(fn_copy, prog_name);
 
     /* Create a new thread to execute FILE_NAME. */
-
-    tid = thread_create(prog_name, PRI_MAX, start_process, fn_copy);
+    tid = thread_create2(prog_name, PRI_DEFAULT, start_process, fn_copy, 
+                         THREAD_PROCESS);
     trs = thread_findchild(tid);
-
     if (tid == TID_ERROR)
         palloc_free_page(fn_copy); 
     else 
@@ -68,7 +67,6 @@ static void start_process(void *file_name_) {
     bool success;
     struct thread *cur;
 
-    
     /* Initialize interrupt frame and load executable. */
     memset(&if_, 0, sizeof(if_));
     if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -77,7 +75,6 @@ static void start_process(void *file_name_) {
     success = load(file_name, &if_.eip, &if_.esp);
 
     /* If load failed, quit. */
-
     palloc_free_page(file_name);
     cur = thread_current();
     if (success) {
@@ -135,16 +132,16 @@ void process_exit(void) {
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
     trs = NULL;
-    if (!cur->parent) {
+    if (cur->parent) {
         old_level = intr_disable();
         cur->trs->stat = -1;
         intr_set_level(old_level);
     }
-
-    printf("%s: exit(%d)\n", cur->name, cur->trs->stat);
+    if (cur->type == THREAD_PROCESS)
+        printf("%s: exit(%d)\n", cur->name, cur->trs->stat);
     intr_set_level(old_level);
     sema_up(&cur->trs->sem);
-        
+    
     pd = cur->pagedir;
     if (pd != NULL) {
         /* Correct ordering here is crucial.  We must set
@@ -252,6 +249,7 @@ bool load(const char *cmdline, void (**eip) (void), void **esp) {
     off_t file_ofs;
     bool success = false;
     int i;
+    char prog_name[16];
 
     /* Allocate and activate page directory. */
     t->pagedir = pagedir_create();
@@ -259,7 +257,6 @@ bool load(const char *cmdline, void (**eip) (void), void **esp) {
         goto done;
     process_activate();
     
-    char prog_name[16];
     get_prog_name(cmdline, prog_name);
 
     /* Open executable file. */
@@ -277,7 +274,6 @@ bool load(const char *cmdline, void (**eip) (void), void **esp) {
         printf("load: %s: error loading executable\n", prog_name);
         goto done; 
     }
-
     /* Read program headers. */
     file_ofs = ehdr.e_phoff;
     for (i = 0; i < ehdr.e_phnum; i++) {
@@ -344,7 +340,6 @@ bool load(const char *cmdline, void (**eip) (void), void **esp) {
     
     /* Start address. */
     *eip = (void (*)(void)) ehdr.e_entry;
-    
     /*Passng Arguments*/
     if (!arg_pass(cmdline, esp))
         goto done;

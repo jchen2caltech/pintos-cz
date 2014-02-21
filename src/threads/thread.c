@@ -67,7 +67,8 @@ static void kernel_thread(thread_func *, void *aux);
 static void idle(void *aux UNUSED);
 static struct thread *running_thread(void);
 static struct thread *next_thread_to_run(void);
-static void init_thread(struct thread *, const char *name, int priority);
+static void init_thread(struct thread *, const char *name, int priority, 
+                        tid_t tid);
 static bool is_thread(struct thread *) UNUSED;
 static void *alloc_frame(struct thread *, size_t size);
 static void schedule(void);
@@ -97,7 +98,7 @@ void thread_init(void) {
 
     /* Set up a thread structure for the running thread. */
     initial_thread = running_thread();
-    init_thread(initial_thread, "main", PRI_DEFAULT);
+    init_thread(initial_thread, "main", PRI_DEFAULT, 0);
     initial_thread->status = THREAD_RUNNING;
     initial_thread->tid = allocate_tid();
 }
@@ -184,6 +185,11 @@ void thread_print_stats(void) {
 
 tid_t thread_create(const char *name, int priority, thread_func *function,
                     void *aux) {
+    return thread_create2(name, priority, function, aux, THREAD_KERNEL);
+}
+
+tid_t thread_create2(const char *name, int priority, thread_func *function, 
+                    void *aux, enum thread_type type) {
     struct thread *t;
     struct kernel_thread_frame *kf;
     struct switch_entry_frame *ef;
@@ -198,8 +204,10 @@ tid_t thread_create(const char *name, int priority, thread_func *function,
         return TID_ERROR;
 
     /* Initialize thread. */
-    init_thread(t, name, priority);
-    tid = t->tid = allocate_tid();
+    t->tid = allocate_tid();
+    tid = t->tid;
+    init_thread(t, name, priority, tid);
+    t->type = type;
 
     /* Stack frame for kernel_thread(). */
     kf = alloc_frame(t, sizeof *kf);
@@ -293,7 +301,7 @@ struct thread_return_status *thread_findchild(pid_t pid) {
     t = thread_current();
     old_level = intr_disable();
     ce = list_begin(&t->child_returnstats);
-    while (ce->next && ce->next->next && !trs) {
+    while (ce->next && !trs) {
         cs = list_entry(ce, struct thread_return_status, elem);
         if (cs->pid == pid)
             trs = cs;
@@ -531,7 +539,8 @@ static bool is_thread(struct thread *t) {
 }
 
 /*! Does basic initialization of T as a blocked thread named NAME. */
-static void init_thread(struct thread *t, const char *name, int priority) {
+static void init_thread(struct thread *t, const char *name, int priority,
+                        tid_t tid) {
     enum intr_level old_level;
     struct thread_return_status *trs;
 
@@ -542,6 +551,7 @@ static void init_thread(struct thread *t, const char *name, int priority) {
     t->status = THREAD_BLOCKED;
     strlcpy(t->name, name, sizeof t->name);
     t->stack = (uint8_t *) t + PGSIZE;
+    t->tid = tid;
     
    /* Set Up priority according to the algorithm;*/
  
@@ -575,15 +585,14 @@ static void init_thread(struct thread *t, const char *name, int priority) {
         trs->pid = (pid_t)t->tid;
         sema_init(&trs->sem, 0);
         t->trs = trs;
-        list_push_back(&(t->parent->child_returnstats), &trs->elem);
+        list_push_back(&(thread_current()->child_returnstats), &trs->elem);
+        
+        list_init(&t->f_lst);
+        t->f_count = 2;
+        t->fd_max = 1;   
     }
-    
-    list_init(&t->f_lst);
-    t->f_count = 2;
-    t->fd_max = 1;    
 
 #endif
-        
     
     list_push_back(&all_list, &t->allelem);
     intr_set_level(old_level);

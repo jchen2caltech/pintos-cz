@@ -92,6 +92,11 @@ typedef int pid_t;
    blocked state is on a semaphore wait list.
 */
 
+enum thread_type {
+    THREAD_KERNEL,
+    THREAD_PROCESS,
+};
+
 struct thread_return_status {
     pid_t pid;
     struct semaphore sem;
@@ -135,6 +140,7 @@ struct thread {
     struct list f_lst;
     uint32_t f_count;
     uint32_t fd_max;
+    enum thread_type type;
 
     /*! Owned by thread.c. */
     /**@{*/
@@ -167,6 +173,9 @@ void thread_tick(void);
 void thread_print_stats(void);
 
 typedef void thread_func(void *aux);
+tid_t thread_create2(const char *name, int priority, thread_func *, void *,
+                     enum thread_type type);
+
 tid_t thread_create(const char *name, int priority, thread_func *, void *);
 
 void thread_block(void);

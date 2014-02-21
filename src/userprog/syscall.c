@@ -57,7 +57,6 @@ static void syscall_handler(struct intr_frame *f) {
             break;
             
         case SYS_CREATE:
-//printf("\nCreating...\n");
             f_name = (const char*) read4(f, 4);
             f_size = (unsigned) read4(f, 8);
             f->eax = (uint32_t) create(f_name, f_size);

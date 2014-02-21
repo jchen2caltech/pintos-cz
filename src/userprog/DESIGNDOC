@@ -68,6 +68,24 @@ user, while strtok() uses a static buffer, which makes it not thread-safe.
 >> and arguments.  In Unix-like systems, the shell does this
 >> separation.  Identify at least two advantages of the Unix approach.
 
+The first advantage for using shell for the separation is that shell-
+separation is safer and more time-efficient. Because the shell will
+pre-check the validity of some commands, then it will filter out the
+obviously wrongly inputed commands before they reach kernel directly,
+hence reducing the time complexity in kernel and making the kernel
+less exposed to illegal commands.
+
+The second advantage of shell separation is by using shells we can
+achieve more complex semantics, like pipeline, redirection.etc, without
+burdening the kernel. However, if we want to achieve all these in Pintos,
+kernel will then have a larger run-time for these operations, which is not
+a really good design.
+
+Thirdly, as looking for files and checking directories tend to be expensive,
+which should be much better done by user-program instead of the kernel.
+Given shell separation, the run-time of kernel is not very long, as the
+shell these file commands. However, as in Pintos, everything is done in the 
+kernel, and hence the run-time of the kernel will be much longer.
 
 
                              SYSTEM CALLS

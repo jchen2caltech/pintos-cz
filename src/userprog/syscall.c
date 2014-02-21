@@ -29,15 +29,19 @@ void syscall_init(void) {
 /*! Handler for each syscall.*/
 
 static void syscall_handler(struct intr_frame *f) {
-    // Retrieve syscall number
+    
     int status;
     const char *cmdline, *f_name;
     unsigned f_size, position, size;
     uint32_t fd;
+    
+    /* Retrieve syscall number */
     uint32_t sys_no = read4(f, 0);
+    
     void *buffer; 
     pid_t pid;
     
+
     
     switch (sys_no) {
         case SYS_HALT:
@@ -154,11 +158,11 @@ int wait(pid_t pid) {
 
 /*! Create a file */
 bool create(const char *f_name, unsigned initial_size) {
-    // Checks the validity of the given pointer
+    /* Checks the validity of the given pointer */
     if (!checkva(f_name))
         exit(-1);
     
-    // Create the file, while locking the file system.
+    /* Create the file, while locking the file system. */
     lock_acquire(&filesys_lock);
     bool flag = filesys_create(f_name, (off_t) initial_size);
     lock_release(&filesys_lock);
@@ -170,11 +174,11 @@ bool create(const char *f_name, unsigned initial_size) {
 
 /*! Remove a file */
 bool remove(const char *f_name) {
-    // Checks the validity of the given pointer
+    /* Checks the validity of the given pointer */
     if (!checkva(f_name))
         exit(-1);
     
-    // Remove the file, while locking the file system.
+    /* Remove the file, while locking the file system. */
     lock_acquire(&filesys_lock);
     bool flag = filesys_remove(f_name);
     lock_release(&filesys_lock);
@@ -187,24 +191,24 @@ int open(const char *f_name) {
     struct f_info *f;
     uint32_t fd;
 
-    // Checks the validity of the given pointer
+    /* Checks the validity of the given pointer */
     if (!checkva(f_name))
        exit(-1);
     
-    // Open the file when locking the file system.
+    /* Open the file when locking the file system. */
     lock_acquire(&filesys_lock);
     struct file* f_open = filesys_open(f_name);
     lock_release(&filesys_lock);
     
     if (f_open == NULL) {
-        // If file open failed, then exit with error.
+        /* If file open failed, then exit with error. */
         return -1;
     } else {
         t = thread_current();
         if (t->f_count > 127)
             exit(-1);
         
-        // Set up new f_info
+        /* Set up new f_info */
         f = (struct f_info*) malloc(sizeof(struct f_info));
         f->f = f_open;
         f->pos = 0;
@@ -213,7 +217,8 @@ int open(const char *f_name) {
         fd = (++(t->fd_max));
         f->fd = fd;
         
-        // Push f_info to the thread's list, and update thread's list count.
+        /* Push f_info to the thread's list, 
+         * and update thread's list count. */
         list_push_back(&(t->f_lst), &(f->elem));
         ++(t->f_count);
         lock_release(&filesys_lock);
@@ -225,10 +230,10 @@ int open(const char *f_name) {
 
 /*! Get the file size give a fd. */
 int filesize(uint32_t fd) {
-    // Find the fd in this process
+    /* Find the fd in this process */
     struct f_info* f = findfile(fd);
     
-    // Find the size of the file
+    /* Find the size of the file */
     lock_acquire(&filesys_lock);
     int size = (int) file_length(f->f);
     lock_release(&filesys_lock);
@@ -239,13 +244,13 @@ int filesize(uint32_t fd) {
 
 /*! Read from file */
 int read(uint32_t fd, void *buffer, unsigned size) {
-    // Check the validity of given pointer
+    /* Check the validity of given pointer */
     if ((!checkva(buffer)) || (!checkva(buffer + size)))
         exit(-1);
     
     int read_size = 0;
     if (fd == STDIN_FILENO) {
-        // If std-in, then read using input_getc()
+        /* If std-in, then read using input_getc() */
         unsigned i;
         for (i = 0; i < size; i++){
             *((uint8_t*) buffer) = input_getc();
@@ -253,12 +258,12 @@ int read(uint32_t fd, void *buffer, unsigned size) {
             ++ buffer;
         }
     } else {
-        // Otherwise, first find the file of this fd.
+        /* Otherwise, first find the file of this fd. */
         struct f_info* f = findfile(fd);
         struct file* fin = f->f;
         off_t pos = f->pos;
         
-        // Read from the file at f->pos
+        /* Read from the file at f->pos */
         lock_acquire(&filesys_lock);
         read_size = (int) file_read_at(fin, buffer, (off_t) size, pos);
         f->pos += (off_t) read_size;
@@ -271,24 +276,24 @@ int read(uint32_t fd, void *buffer, unsigned size) {
 
 /*! Write to file. */
 int write(uint32_t fd, const void *buffer, unsigned size) {
-    // Check the validity of given pointer
+    /* Check the validity of given pointer */
     if ((!checkva(buffer)) || (!checkva(buffer + size)))
         exit(-1);
     
     int write_size = 0;
     
     if (fd == STDOUT_FILENO) {
-        // If std-out, then write using putbuf()
+        /* If std-out, then write using putbuf() */
         putbuf(buffer, size);
         write_size = size;
         
     } else {
-        // Otherwise, first find the file of this fd.
+        /* Otherwise, first find the file of this fd. */
         struct f_info* f = findfile(fd);
         struct file* fout = f->f;
         off_t pos = f->pos;
         
-        // Write to the file at f->pos
+        /* Write to the file at f->pos */
         lock_acquire(&filesys_lock);
         write_size = (int) file_write_at(fout, buffer, (off_t) size, pos);
         f->pos += (off_t) write_size;
@@ -302,10 +307,10 @@ int write(uint32_t fd, const void *buffer, unsigned size) {
 
 /*! Jump to a position of a file */
 void seek(uint32_t fd, unsigned position) {
-    // first find the file of this fd.
+    /* first find the file of this fd. */
     struct f_info* f = findfile(fd);
     
-    // if position exceeds the file, then return the end of the file
+    /* if position exceeds the file, then return the end of the file */
     if ((int) position > filesize(fd))
         position = (unsigned) filesize(fd);
     
@@ -315,7 +320,7 @@ void seek(uint32_t fd, unsigned position) {
 
 /*! Return the position of the file the process is accessing*/
 unsigned tell(uint32_t fd) {
-    // first find the file of this fd.
+    /* first find the file of this fd. */
     struct f_info* f = findfile(fd);
     
     return (unsigned) f->pos;
@@ -323,11 +328,11 @@ unsigned tell(uint32_t fd) {
 
 /*! Close an fd */
 void close(uint32_t fd) {
-    // first find the file of this fd.
+    /* first find the file of this fd. */
     struct f_info* f = findfile(fd);
     
-    // Close the file, remove the f_info from the f_lst, and then
-    // free this f_info. Update f_count accordingly.
+    /* Close the file, remove the f_info from the f_lst, and then
+     * free this f_info. Update f_count accordingly. */
     
     lock_acquire(&filesys_lock);
     file_close(f->f);
@@ -355,15 +360,15 @@ struct f_info* findfile(uint32_t fd) {
     struct list* f_lst = &(t->f_lst);
     struct list_elem *e;
     
-    // Iterate through the entire f_lst to look for the same fd.
-    // Return immediately, once found it.
+    /* Iterate through the entire f_lst to look for the same fd.
+     * Return immediately, once found it. */
     for (e = list_begin(f_lst); e != list_end(f_lst); e = list_next(e)) {
         struct f_info* f = list_entry(e, struct f_info, elem);
         if (f->fd == fd)
             return f;
     }
     
-    // If not found, then exit with error.
+    /* If not found, then exit with error. */
     exit(-1);
     return NULL;
     

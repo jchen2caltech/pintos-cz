@@ -36,6 +36,7 @@ static void syscall_handler(struct intr_frame *f) {
     void *buffer; 
     pid_t pid;
     
+    
     switch (sys_no) {
         case SYS_HALT:
             halt();
@@ -293,6 +294,7 @@ void close(uint32_t fd) {
     
     lock_acquire(&filesys_lock);
     file_close(f->f);
+    list_remove(&f->elem);
     free(f);
     struct thread* t = thread_current();
     --(t->f_count);

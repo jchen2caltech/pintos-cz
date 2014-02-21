@@ -142,6 +142,10 @@ void process_exit(void) {
     intr_set_level(old_level);
     sema_up(&cur->trs->sem);
     
+    if ((cur->f_exe) != NULL){
+        file_allow_write(cur->f_exe);
+        file_close(cur->f_exe);
+    }
     pd = cur->pagedir;
     if (pd != NULL) {
         /* Correct ordering here is crucial.  We must set
@@ -151,9 +155,13 @@ void process_exit(void) {
            directory before destroying the process's page
            directory, or our active page directory will be one
            that's been freed (and cleared). */
+
         cur->pagedir = NULL;
+
         pagedir_activate(NULL);
+
         pagedir_destroy(pd);
+
     }
 }
 
@@ -261,10 +269,13 @@ bool load(const char *cmdline, void (**eip) (void), void **esp) {
 
     /* Open executable file. */
     file = filesys_open(prog_name);
+    
     if (file == NULL) {
         printf("load: %s: open failed\n", prog_name);
         goto done; 
     }
+    t->f_exe = file;
+    file_deny_write(file);
 
     /* Read and verify executable header. */
     if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr ||
@@ -351,7 +362,6 @@ bool load(const char *cmdline, void (**eip) (void), void **esp) {
 
 done:
     /* We arrive here whether the load is successful or not. */
-    file_close(file);
     return success;
 }
 

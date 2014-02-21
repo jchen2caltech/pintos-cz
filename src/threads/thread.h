@@ -141,6 +141,7 @@ struct thread {
     uint32_t f_count;
     uint32_t fd_max;
     enum thread_type type;
+    struct file* f_exe;
 
     /*! Owned by thread.c. */
     /**@{*/

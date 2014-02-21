@@ -326,7 +326,7 @@ void thread_exit(void) {
     while (!list_empty(&t->f_lst)) {
         ce = list_pop_front(&t->f_lst);
         cf = list_entry(ce, struct f_info, elem);
-        close(cf->f);
+        file_close(cf->f);
         free(cf);
     }
 

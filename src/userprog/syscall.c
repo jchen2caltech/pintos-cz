@@ -133,7 +133,7 @@ void halt(void) {
 /*! exit */
 void exit(int status) {
     struct thread *t;
-
+    
     t = thread_current();
     t->trs->stat = status;
     t->parent = NULL;
@@ -326,6 +326,9 @@ void close(uint32_t fd) {
     // first find the file of this fd.
     struct f_info* f = findfile(fd);
     
+    // Close the file, remove the f_info from the f_lst, and then
+    // free this f_info. Update f_count accordingly.
+    
     lock_acquire(&filesys_lock);
     file_close(f->f);
     list_remove(&f->elem);
@@ -352,12 +355,15 @@ struct f_info* findfile(uint32_t fd) {
     struct list* f_lst = &(t->f_lst);
     struct list_elem *e;
     
+    // Iterate through the entire f_lst to look for the same fd.
+    // Return immediately, once found it.
     for (e = list_begin(f_lst); e != list_end(f_lst); e = list_next(e)) {
         struct f_info* f = list_entry(e, struct f_info, elem);
         if (f->fd == fd)
             return f;
     }
     
+    // If not found, then exit with error.
     exit(-1);
     return NULL;
     

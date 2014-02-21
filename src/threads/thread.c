@@ -89,8 +89,6 @@ static int32_t load_avg;
     It is not safe to call thread_current() until this function finishes. */
 void thread_init(void) {
     ASSERT(intr_get_level() == INTR_OFF);
-
-    printf("\n\n\n\nhello!!!\n\n\n\n\n");
     lock_init(&tid_lock);
     list_init(&ready_list);
     list_init(&all_list);

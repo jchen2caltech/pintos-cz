@@ -163,6 +163,7 @@ void process_exit(void) {
         }
         list_remove(&cur->childelem);
         intr_set_level(old_level);
+        printf("%s:exit(%d)\n", thread_current()->name, -1);
     }
         
     pd = cur->pagedir;

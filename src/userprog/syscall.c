@@ -153,6 +153,7 @@ void exit(int status) {
     }
     t->parent = NULL;
     intr_set_level(old_level);
+    printf("%s:exit(%d)\n", t->name, status);
     thread_exit();
 }
 

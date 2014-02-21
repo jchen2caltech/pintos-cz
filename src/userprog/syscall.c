@@ -26,6 +26,8 @@ void syscall_init(void) {
     intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
+/*! Handler for each syscall.*/
+
 static void syscall_handler(struct intr_frame *f) {
     // Retrieve syscall number
     int status;
@@ -115,16 +117,20 @@ static void syscall_handler(struct intr_frame *f) {
     
 }
 
+
+/*! Reads for bytes from the stack according to the offset. */
 static uint32_t read4(struct intr_frame * f, int offset) {
     if (!checkva(f->esp + offset))
         exit(-1);
     return *((uint32_t *) (f->esp + offset));
 }
 
+/*! halt */
 void halt(void) {
     shutdown_power_off();
 }
 
+/*! exit */
 void exit(int status) {
     struct thread *t;
 
@@ -134,23 +140,26 @@ void exit(int status) {
     thread_exit();
 }
 
+/*! execute */
 pid_t exec(const char *cmd_line) {
     if (checkva(cmd_line))
         return process_execute(cmd_line);
     exit(-1);
 }
 
+/*! wait */
 int wait(pid_t pid) {
     return process_wait(pid);
 }
 
+/*! Create a file */
 bool create(const char *f_name, unsigned initial_size) {
+    // Checks the validity of the given pointer
     if (!checkva(f_name))
         exit(-1);
-    //printf("\n\nHello\n\n");
+    
+    // Create the file, while locking the file system.
     lock_acquire(&filesys_lock);
-    //printf("\n\ncreating file name:[%s]\n", f_name);
-    //printf("And the size is %d\n\n\n", initial_size);
     bool flag = filesys_create(f_name, (off_t) initial_size);
     lock_release(&filesys_lock);
 
@@ -159,28 +168,36 @@ bool create(const char *f_name, unsigned initial_size) {
 
 }
 
+/*! Remove a file */
 bool remove(const char *f_name) {
+    // Checks the validity of the given pointer
     if (!checkva(f_name))
         exit(-1);
+    
+    // Remove the file, while locking the file system.
     lock_acquire(&filesys_lock);
     bool flag = filesys_remove(f_name);
     lock_release(&filesys_lock);
     return flag;
 }
 
+/*! Open a file */
 int open(const char *f_name) {
     struct thread *t;
     struct f_info *f;
     uint32_t fd;
 
+    // Checks the validity of the given pointer
     if (!checkva(f_name))
        exit(-1);
     
+    // Open the file when locking the file system.
     lock_acquire(&filesys_lock);
     struct file* f_open = filesys_open(f_name);
     lock_release(&filesys_lock);
     
     if (f_open == NULL) {
+        // If file open failed, then exit with error.
         return -1;
     } else {
         t = thread_current();
@@ -206,8 +223,12 @@ int open(const char *f_name) {
 
 }
 
+/*! Get the file size give a fd. */
 int filesize(uint32_t fd) {
+    // Find the fd in this process
     struct f_info* f = findfile(fd);
+    
+    // Find the size of the file
     lock_acquire(&filesys_lock);
     int size = (int) file_length(f->f);
     lock_release(&filesys_lock);
@@ -216,12 +237,15 @@ int filesize(uint32_t fd) {
 
 }
 
+/*! Read from file */
 int read(uint32_t fd, void *buffer, unsigned size) {
+    // Check the validity of given pointer
     if ((!checkva(buffer)) || (!checkva(buffer + size)))
         exit(-1);
     
     int read_size = 0;
     if (fd == STDIN_FILENO) {
+        // If std-in, then read using input_getc()
         unsigned i;
         for (i = 0; i < size; i++){
             *((uint8_t*) buffer) = input_getc();
@@ -229,10 +253,12 @@ int read(uint32_t fd, void *buffer, unsigned size) {
             ++ buffer;
         }
     } else {
+        // Otherwise, first find the file of this fd.
         struct f_info* f = findfile(fd);
         struct file* fin = f->f;
         off_t pos = f->pos;
         
+        // Read from the file at f->pos
         lock_acquire(&filesys_lock);
         read_size = (int) file_read_at(fin, buffer, (off_t) size, pos);
         f->pos += (off_t) read_size;
@@ -243,22 +269,26 @@ int read(uint32_t fd, void *buffer, unsigned size) {
 
 }
 
+/*! Write to file. */
 int write(uint32_t fd, const void *buffer, unsigned size) {
-    
+    // Check the validity of given pointer
     if ((!checkva(buffer)) || (!checkva(buffer + size)))
         exit(-1);
     
     int write_size = 0;
     
     if (fd == STDOUT_FILENO) {
+        // If std-out, then write using putbuf()
         putbuf(buffer, size);
         write_size = size;
         
     } else {
+        // Otherwise, first find the file of this fd.
         struct f_info* f = findfile(fd);
         struct file* fout = f->f;
         off_t pos = f->pos;
         
+        // Write to the file at f->pos
         lock_acquire(&filesys_lock);
         write_size = (int) file_write_at(fout, buffer, (off_t) size, pos);
         f->pos += (off_t) write_size;
@@ -270,7 +300,9 @@ int write(uint32_t fd, const void *buffer, unsigned size) {
 
 }
 
+/*! Jump to a position of a file */
 void seek(uint32_t fd, unsigned position) {
+    // first find the file of this fd.
     struct f_info* f = findfile(fd);
     
     // if position exceeds the file, then return the end of the file
@@ -281,14 +313,18 @@ void seek(uint32_t fd, unsigned position) {
 
 }
 
+/*! Return the position of the file the process is accessing*/
 unsigned tell(uint32_t fd) {
+    // first find the file of this fd.
     struct f_info* f = findfile(fd);
+    
     return (unsigned) f->pos;
 }
 
+/*! Close an fd */
 void close(uint32_t fd) {
+    // first find the file of this fd.
     struct f_info* f = findfile(fd);
-    list_remove(&f->elem);
     
     lock_acquire(&filesys_lock);
     file_close(f->f);

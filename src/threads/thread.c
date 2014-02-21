@@ -13,8 +13,10 @@
 #include "threads/vaddr.h"
 #include "threads/fixed-pt.h"
 #include "devices/timer.h"
+#ifdef USERPROG
 #include "userprog/process.h"
 #include "filesys/file.h"
+#endif
 
 /*! Random value for struct thread's `magic' member.
     Used to detect stack overflow.  See the big comment at the top
@@ -37,9 +39,6 @@ static struct thread *initial_thread;
 
 /*! Lock used by allocate_tid(). */
 static struct lock tid_lock;
-
-/*! Lock for file-system. */
-static struct lock filesys_lock;
 
 /*! Stack frame for kernel_thread(). */
 struct kernel_thread_frame {
@@ -91,7 +90,6 @@ static int32_t load_avg;
 void thread_init(void) {
     ASSERT(intr_get_level() == INTR_OFF);
     lock_init(&tid_lock);
-    lock_init(&filesys_lock);
     list_init(&ready_list);
     list_init(&all_list);
     load_avg = 0;
@@ -182,13 +180,8 @@ void thread_print_stats(void) {
     The code provided sets the new thread's `priority' member to PRIORITY, but
     no actual priority scheduling is implemented.  Priority scheduling is the
     goal of Problem 1-3. */
-tid_t thread_create(const char *name, int priority, thread_func *function, 
+tid_t thread_create(const char *name, int priority, thread_func *function,
                     void *aux) {
-    return thread_create2(name, priority, function, aux, THREAD_KERNEL);
-}
-
-tid_t thread_create2(const char *name, int priority, thread_func *function,
-                    void *aux, enum thread_type type) {
     struct thread *t;
     struct kernel_thread_frame *kf;
     struct switch_entry_frame *ef;
@@ -205,7 +198,6 @@ tid_t thread_create2(const char *name, int priority, thread_func *function,
     /* Initialize thread. */
     init_thread(t, name, priority);
     tid = t->tid = allocate_tid();
-    t->type = type;
 
     /* Stack frame for kernel_thread(). */
     kf = alloc_frame(t, sizeof *kf);
@@ -284,10 +276,6 @@ struct thread * thread_current(void) {
     return t;
 }
 
-struct lock* fsys_lock(void){
-    return &filesys_lock;
-}
-
 /*! Returns the running thread's tid. */
 tid_t thread_tid(void) {
     return thread_current()->tid;
@@ -300,19 +288,18 @@ void thread_exit(void) {
 
     ASSERT(!intr_context());
 
-    t = thread_current();
-
-    if (t->thread_type == THREAD_PROCESS)
-        process_exit();
+#ifdef USERPROG
+    process_exit();
+#endif
 
 
     /* Remove thread from all threads list, set our status to dying,
        and schedule another process.  That process will destroy us
        when it calls thread_schedule_tail(). */
     intr_disable();
-    ASSERT(list_empty(&t->locks));
-    list_remove(&t->allelem);
-    t->status = THREAD_DYING;
+    ASSERT(list_empty(&thread_current()->locks));
+    list_remove(&thread_current()->allelem);
+    thread_current()->status = THREAD_DYING;
     schedule();
     NOT_REACHED();
 }
@@ -516,8 +503,6 @@ static void init_thread(struct thread *t, const char *name, int priority) {
     enum intr_level old_level;
     struct thread_return_stat *trs;
 
-    if (t != initial_thread)
-    
     ASSERT(t != NULL);
     ASSERT(PRI_MIN <= priority && priority <= PRI_MAX);
     ASSERT(name != NULL);
@@ -547,7 +532,7 @@ static void init_thread(struct thread *t, const char *name, int priority) {
     list_init(&t->locks); 
     t->waiting_lock = NULL;
     old_level = intr_disable();
-
+#ifdef USERPROG
     list_init(&t->child_returnstats);
     list_init(&t->child_processes);
     if (t == initial_thread) {
@@ -564,7 +549,12 @@ static void init_thread(struct thread *t, const char *name, int priority) {
     list_init(&t->f_lst);
     t->f_count = 2;
     t->fd_max = 1;
-            
+    
+    
+    
+
+#endif
+        
     
     list_push_back(&all_list, &t->allelem);
     intr_set_level(old_level);

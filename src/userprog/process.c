@@ -46,7 +46,10 @@ tid_t process_execute(const char *file_name) {
     get_prog_name(fn_copy, prog_name);
 
     /* Create a new thread to execute FILE_NAME. */
-    tid = thread_create(prog_name, PRI_DEFAULT, start_process, fn_copy);
+
+    tid = thread_create2(prog_name, PRI_MAX, start_process, fn_copy, \
+                        THREAD_PROCESS);
+
     if (tid == TID_ERROR)
         palloc_free_page(fn_copy); 
     return tid;
@@ -54,6 +57,7 @@ tid_t process_execute(const char *file_name) {
 
 /*! A thread function that loads a user process and starts it running. */
 static void start_process(void *file_name_) {
+    
     char *file_name = file_name_;
     struct intr_frame if_;
     bool success;
@@ -62,6 +66,7 @@ static void start_process(void *file_name_) {
     struct list_elem *ce;
     enum intr_level old_level;
 
+    
     /* Initialize interrupt frame and load executable. */
     memset(&if_, 0, sizeof(if_));
     if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -70,6 +75,7 @@ static void start_process(void *file_name_) {
     success = load(file_name, &if_.eip, &if_.esp);
 
     /* If load failed, quit. */
+
     palloc_free_page(file_name);
     ct = thread_current();
     pt = ct->parent;
@@ -82,10 +88,12 @@ static void start_process(void *file_name_) {
             trs = cs;
         ce = list_next(ce);
     }
+
     if (trs) {
         trs->stat = (success ? 0 : -1);
         sema_up(&trs->sem);
     }
+
     intr_set_level(old_level);
     if (!success) 
         thread_exit();
@@ -163,7 +171,7 @@ void process_exit(void) {
         }
         list_remove(&cur->childelem);
         intr_set_level(old_level);
-        printf("%s:exit(%d)\n", thread_current()->name, -1);
+        printf("%s: exit(%d)\n", thread_current()->name, -1);
     }
         
     pd = cur->pagedir;
@@ -357,23 +365,27 @@ bool load(const char *cmdline, void (**eip) (void), void **esp) {
             break;
         }
     }
+    
 
     /* Set up stack. */
     if (!setup_stack(esp))
         goto done;
     
+    /* Start address. */
+    *eip = (void (*)(void)) ehdr.e_entry;
+    
     /*Passng Arguments*/
     if (!arg_pass(cmdline, esp))
         goto done;
 
-    /* Start address. */
-    *eip = (void (*)(void)) ehdr.e_entry;
+    
+    
 
     success = true;
 
 done:
     /* We arrive here whether the load is successful or not. */
-    //file_close(file);
+    file_close(file);
     return success;
 }
 
@@ -487,7 +499,7 @@ static bool setup_stack(void **esp) {
     if (kpage != NULL) {
         success = install_page(((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
         if (success)
-            *esp = PHYS_BASE;
+            *esp = PHYS_BASE ;
         else
             palloc_free_page(kpage);
     }
@@ -522,6 +534,7 @@ static bool arg_pass(const char*cmdline, void **esp) {
    char* word_end;
    size_t word_len;
    
+   
    curr = cmdline + strlen(cmdline);
    while(curr >= cmdline)
    {
@@ -539,7 +552,6 @@ static bool arg_pass(const char*cmdline, void **esp) {
        strlcpy(stack_top - word_len - 1, word_begin, word_len + 1);
        *(stack_top - 1) = '\0';
        stack_top -= (word_len + 1);
-       
        
    }
  
@@ -564,6 +576,8 @@ static bool arg_pass(const char*cmdline, void **esp) {
        if(((int)stack_top)%4 == 0)
            count_limit--;
    }
+   if (!push4(&stack_top, NULL, esp))
+       return false;
    
    char *p = PHYS_BASE - 1;
    int argc = 0;
@@ -573,18 +587,16 @@ static bool arg_pass(const char*cmdline, void **esp) {
           p--;
       if (!push4(&stack_top, (void*)(p+1), esp))
           return false;
+      
       argc++;
        
    }
-   
    if (!push4(&stack_top, (void*)(stack_top), esp))
-       return false;
-   
-   if (!push4(&stack_top, NULL, esp))
        return false;
    
    if (!push4(&stack_top, (void*)(argc), esp))
        return false;
+
     
    if (!push4(&stack_top, NULL, esp))
        return false;
@@ -597,7 +609,7 @@ static bool push4(char** stack_ptr, void* val, void** esp) {
     if ((int)*esp - (int)*stack_ptr + 4 > PGSIZE)
         return false;
     *stack_ptr -= 4;
-    *(*stack_ptr) = val;
+    *((void **)(*stack_ptr)) = val;
     return true;
 }
 

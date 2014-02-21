@@ -31,7 +31,7 @@ static void syscall_handler(struct intr_frame *f) {
     uint32_t sys_no = read4(f, 0);
     void *buffer; 
     pid_t pid;
-
+    
     switch (sys_no) {
         case SYS_HALT:
             halt();
@@ -117,7 +117,6 @@ static uint32_t read4(struct intr_frame * f, int offset) {
 }
 
 void halt(void) {
-    printf("shutting down\n");
     shutdown_power_off();
 }
 
@@ -128,32 +127,34 @@ void exit(int status) {
     struct thread_return_stat *cs, *trs;
 
     t = thread_current();
-    pt = t->parent;
-    trs = NULL;
-    old_level = intr_disable();
-    if (pt) {
-        ce = list_begin(&pt->child_returnstats);
-        while (!trs && ce->next && ce->next->next) {
-            cs = list_entry(ce, struct thread_return_stat, elem);
-            if (cs->pid == t->tid)
-                trs = cs;
-            ce = list_next(ce);
+    if (t->type == THREAD_PROCESS) {
+        pt = t->parent;
+        trs = NULL;
+        old_level = intr_disable();
+        if (pt) {
+	    ce = list_begin(&pt->child_returnstats);
+	    while (!trs && ce->next && ce->next->next) {
+	        cs = list_entry(ce, struct thread_return_stat, elem);
+	        if (cs->pid == t->tid)
+	            trs = cs;
+	        ce = list_next(ce);
+	    }
+	    if (trs) {
+	        trs->stat = status;
+	        sema_up(&trs->sem);
+	    }
+	    list_remove(&t->childelem);
         }
-        if (trs) {
-            trs->stat = status;
-            sema_up(&trs->sem);
+        ce = list_begin(&t->child_processes);
+        while (ce->next && ce->next->next) {
+	    ct = list_entry(ce, struct thread, childelem);
+	    ct->parent = NULL;
+	    ce = list_next(ce);
         }
-        list_remove(&t->childelem);
+        t->parent = NULL;
+        intr_set_level(old_level);
+        printf("%s: exit(%d)\n", t->name, status);
     }
-    ce = list_begin(&t->child_processes);
-    while (ce->next && ce->next->next) {
-        ct = list_entry(ce, struct thread, childelem);
-        ct->parent = NULL;
-        ce = list_next(ce);
-    }
-    t->parent = NULL;
-    intr_set_level(old_level);
-    printf("%s:exit(%d)\n", t->name, status);
     thread_exit();
 }
 
@@ -173,9 +174,11 @@ int wait(pid_t pid) {
 bool create(const char *f_name, unsigned initial_size) {
     if (!checkva(f_name))
         exit(-1);
+    printf("\n\nstart creating\n\n");
     // Probably Lock?!
     bool flag = filesys_create(f_name, initial_size);
     // Unlock?!
+    printf("\n\nDone creating\n\n");
     return flag;
 
 }
@@ -269,6 +272,7 @@ int read(uint32_t fd, void *buffer, unsigned size) {
 }
 
 int write(uint32_t fd, const void *buffer, unsigned size) {
+    
     if ((!checkva(buffer)) || (!checkva(buffer + size)))
         exit(-1);
     

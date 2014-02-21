@@ -180,8 +180,13 @@ void thread_print_stats(void) {
     The code provided sets the new thread's `priority' member to PRIORITY, but
     no actual priority scheduling is implemented.  Priority scheduling is the
     goal of Problem 1-3. */
-tid_t thread_create(const char *name, int priority, thread_func *function,
+tid_t thread_create(const char *name, int priority, thread_func *function, 
                     void *aux) {
+    return thread_create2(name, priority, function, aux, THREAD_KERNEL);
+}
+
+tid_t thread_create2(const char *name, int priority, thread_func *function,
+                    void *aux, enum thread_type type) {
     struct thread *t;
     struct kernel_thread_frame *kf;
     struct switch_entry_frame *ef;
@@ -198,6 +203,7 @@ tid_t thread_create(const char *name, int priority, thread_func *function,
     /* Initialize thread. */
     init_thread(t, name, priority);
     tid = t->tid = allocate_tid();
+    t->type = type;
 
     /* Stack frame for kernel_thread(). */
     kf = alloc_frame(t, sizeof *kf);
@@ -503,6 +509,8 @@ static void init_thread(struct thread *t, const char *name, int priority) {
     enum intr_level old_level;
     struct thread_return_stat *trs;
 
+    if (t != initial_thread)
+    
     ASSERT(t != NULL);
     ASSERT(PRI_MIN <= priority && priority <= PRI_MAX);
     ASSERT(name != NULL);

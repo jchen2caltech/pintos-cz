@@ -91,6 +91,11 @@ typedef int pid_t;
    ready state is on the run queue, whereas only a thread in the
    blocked state is on a semaphore wait list.
 */
+enum thread_type {
+    THREAD_KERNEL,
+    THREAD_PROCESS,
+};
+
 struct thread {
     /*! Owned by thread.c. */
     /**@{*/
@@ -115,6 +120,7 @@ struct thread {
 
     struct list locks;                  /*!< List of locks acquired by the thread */
 
+    enum thread_type type;
 #ifdef USERPROG
     /*! Owned by userprog/process.c. */
     /**@{*/
@@ -200,7 +206,8 @@ int thread_get_load_avg(void);
 static void thread_update_recent_cpu(struct thread* t, void *args UNUSED);
 static void update_load_avg(void);
 static void thread_update_priority(struct thread* t, void *args UNUSED);
-
+tid_t thread_create2(const char *name, int priority, thread_func *function,
+                    void *aux, enum thread_type type); 
 
 
 #endif /* threads/thread.h */

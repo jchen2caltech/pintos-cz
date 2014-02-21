@@ -208,6 +208,7 @@ static void update_load_avg(void);
 static void thread_update_priority(struct thread* t, void *args UNUSED);
 tid_t thread_create2(const char *name, int priority, thread_func *function,
                     void *aux, enum thread_type type); 
+struct lock* fsys_lock(void);
 
 
 #endif /* threads/thread.h */

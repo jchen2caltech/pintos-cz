@@ -40,6 +40,9 @@ static struct thread *initial_thread;
 /*! Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
+/*! Lock for file-system. */
+static struct lock filesys_lock;
+
 /*! Stack frame for kernel_thread(). */
 struct kernel_thread_frame {
     void *eip;                  /*!< Return address. */
@@ -90,6 +93,7 @@ static int32_t load_avg;
 void thread_init(void) {
     ASSERT(intr_get_level() == INTR_OFF);
     lock_init(&tid_lock);
+    lock_init(&filesys_lock);
     list_init(&ready_list);
     list_init(&all_list);
     load_avg = 0;
@@ -280,6 +284,10 @@ struct thread * thread_current(void) {
     ASSERT(t->status == THREAD_RUNNING);
 
     return t;
+}
+
+struct lock* fsys_lock(void){
+    return &filesys_lock;
 }
 
 /*! Returns the running thread's tid. */

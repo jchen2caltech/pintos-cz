@@ -18,6 +18,7 @@ bool checkva(const void* va);
 struct f_info *findfile(uint32_t fd);
 static uint32_t read4(struct intr_frame * f, int offset);
 
+
 void syscall_init(void) {
     intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
@@ -174,11 +175,11 @@ int wait(pid_t pid) {
 bool create(const char *f_name, unsigned initial_size) {
     if (!checkva(f_name))
         exit(-1);
-    printf("\n\nstart creating\n\n");
-    // Probably Lock?!
+
+    lock_acquire(fsys_lock());
     bool flag = filesys_create(f_name, initial_size);
-    // Unlock?!
-    printf("\n\nDone creating\n\n");
+    lock_release(fsys_lock());
+
     return flag;
 
 }
@@ -186,9 +187,9 @@ bool create(const char *f_name, unsigned initial_size) {
 bool remove(const char *f_name) {
     if (!checkva(f_name))
         exit(-1);
-    // Lock?!
+    lock_acquire(fsys_lock());
     bool flag = filesys_remove(f_name);
-    // Unlock?!
+    lock_release(fsys_lock());
     return flag;
     
 
@@ -202,9 +203,9 @@ int open(const char *f_name) {
     if (!checkva(f_name) || !(checkva(f_name + strlen(f_name))))
        exit(-1);
     
-    //Lock?!
+    lock_acquire(fsys_lock());
     struct file* f_open = filesys_open(f_name);
-    //Unlock?!
+    lock_release(fsys_lock());
     
     if (f_open == NULL) {
         return -1;
@@ -218,14 +219,14 @@ int open(const char *f_name) {
         f->f = f_open;
         f->pos = 0;
         
-        //lock?!
+        lock_acquire(fsys_lock());
         fd = (++(t->fd_max));
         f->fd = fd;
         
         // Push f_info to the thread's list, and update thread's list count.
         list_push_back(&(t->f_lst), &(f->elem));
         ++(t->f_count);
-        //unlock?!
+        lock_release(fsys_lock());
     }
     
     return fd;
@@ -234,9 +235,9 @@ int open(const char *f_name) {
 
 int filesize(uint32_t fd) {
     struct f_info* f = findfile(fd);
-    //Lock?!
+    lock_acquire(fsys_lock());
     int size = (int) file_length(f->f);
-    //Unlock?!
+    lock_release(fsys_lock());
     
     return size;
 
@@ -260,10 +261,10 @@ int read(uint32_t fd, void *buffer, unsigned size) {
         struct file* fin = f->f;
         off_t pos = f->pos;
         
-        //Lock?!
+        lock_acquire(fsys_lock());
         read_size = (int) file_read_at(fin, buffer, (off_t) size, pos);
         f->pos += (off_t) read_size;
-        //Unlock?!
+        lock_release(fsys_lock());
         
     }
     
@@ -287,10 +288,10 @@ int write(uint32_t fd, const void *buffer, unsigned size) {
         struct file* fout = f->f;
         off_t pos = f->pos;
         
-        //Lock?!
+        lock_acquire(fsys_lock());
         write_size = (int) file_write_at(fout, buffer, (off_t) size, pos);
         f->pos += (off_t) write_size;
-        //Unlock?!
+        lock_release(fsys_lock());
         
     }
     
@@ -318,13 +319,12 @@ void close(uint32_t fd) {
     struct f_info* f = findfile(fd);
     list_remove(&f->elem);
     
-    //lock?
-    
+    lock_acquire(fsys_lock());
     file_close(f->f);
     free(f);
     struct thread* t = thread_current();
     --(t->f_count);
-    //unlock?
+    lock_release(fsys_lock());
 
 }
 

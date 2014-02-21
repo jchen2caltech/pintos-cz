@@ -13,10 +13,8 @@
 #include "threads/vaddr.h"
 #include "threads/fixed-pt.h"
 #include "devices/timer.h"
-#ifdef USERPROG
 #include "userprog/process.h"
 #include "filesys/file.h"
-#endif
 
 /*! Random value for struct thread's `magic' member.
     Used to detect stack overflow.  See the big comment at the top
@@ -302,18 +300,19 @@ void thread_exit(void) {
 
     ASSERT(!intr_context());
 
-#ifdef USERPROG
-    process_exit();
-#endif
+    t = thread_current();
+
+    if (t->thread_type == THREAD_PROCESS)
+        process_exit();
 
 
     /* Remove thread from all threads list, set our status to dying,
        and schedule another process.  That process will destroy us
        when it calls thread_schedule_tail(). */
     intr_disable();
-    ASSERT(list_empty(&thread_current()->locks));
-    list_remove(&thread_current()->allelem);
-    thread_current()->status = THREAD_DYING;
+    ASSERT(list_empty(&t->locks));
+    list_remove(&t->allelem);
+    t->status = THREAD_DYING;
     schedule();
     NOT_REACHED();
 }
@@ -548,7 +547,7 @@ static void init_thread(struct thread *t, const char *name, int priority) {
     list_init(&t->locks); 
     t->waiting_lock = NULL;
     old_level = intr_disable();
-#ifdef USERPROG
+
     list_init(&t->child_returnstats);
     list_init(&t->child_processes);
     if (t == initial_thread) {
@@ -565,12 +564,7 @@ static void init_thread(struct thread *t, const char *name, int priority) {
     list_init(&t->f_lst);
     t->f_count = 2;
     t->fd_max = 1;
-    
-    
-    
-
-#endif
-        
+            
     
     list_push_back(&all_list, &t->allelem);
     intr_set_level(old_level);

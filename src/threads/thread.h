@@ -126,6 +126,8 @@ struct thread {
     /**@{*/
     uint32_t *pagedir;                  /*!< Page directory. */
     /**@{*/
+#endif
+
     struct list child_returnstats;
     struct list child_processes;
     struct list_elem childelem;
@@ -133,7 +135,6 @@ struct thread {
     struct list f_lst;
     uint32_t f_count;
     uint32_t fd_max;
-#endif
 
     /*! Owned by thread.c. */
     /**@{*/

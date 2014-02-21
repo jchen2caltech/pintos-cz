@@ -123,14 +123,55 @@ struct f_info {
     
 };
 
+This struct f_info is the element of file list (f_lst) for each process.
+f_info->f is the file object; f_info->pos is the position or file offset
+of file the process is current accessing; f_info-> elem, used to maintaining
+the corresponding list; f_info-> fd is the file descriptor assigned to
+this file.
+
 >> B2: Describe how file descriptors are associated with open files.
 >> Are file descriptors unique within the entire OS or just within a
 >> single process?
+
+For each process, we have a list of f_info's, which is a structure
+stores the each opening file, the corresponding fd, and the position
+of the file the program now is accessing. Moreover, in our implementation,
+in order to achieve minimum space and time complexity of maintaining
+a list of f_info, for each process except from the list of f_info (f_lst), 
+we keeps the number of elements in the f_lst (f_count) and the maximum
+number of fd we have assigned (fd_max). Then each time when we want to
+open a file, we check whether fd_max is less than 128, and then assign
+fd_max + 1 to this newly opened file. (Of course, update everything 
+accordingly after we have finished opening this file)
+
+Therefore, in our implementation, file descriptor is unique inside a
+single process, but not unique within the entire OS.
 
 ---- ALGORITHMS ----
 
 >> B3: Describe your code for reading and writing user data from the
 >> kernel.
+
+For both read and write, our implementation do the following steps.
+
+1) Check the buffer pointer (both its head and end) is inside the userprog 
+stack and is mapped. In this way, we ensures the userprog to only access
+the memory they are allowed to.
+ 
+2) If fd is standard input or output, then either read with "input_getc"
+each charater by charater to buffer, or write from the buffer to std output
+with "putbuf."
+
+3) If fd is not standard input or output, we first iterate through all
+the f_info of the process's f_lst to find the f_info with the same fd.
+If not found in the end, then exit(-1). 
+
+4) If we find the corresponding f_info, then we first lock the entire
+filesystem, to avoid simultaneous read or write to the same file.
+Then we read or write to f_info->f (the file object of f_info) at the 
+position of f_info->pos. Then we update the position f_info->pos by 
+incrementing how much we read and write. Finally, we unlock the entire
+filesystem and return the read_size or write_size.
 
 >> B4: Suppose a system call causes a full page (4,096 bytes) of data
 >> to be copied from user space into the kernel.  What is the least

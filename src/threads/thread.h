@@ -128,15 +128,14 @@ struct thread {
     /**@{*/
     uint32_t *pagedir;                  /*!< Page directory. */
     /**@{*/
-
+#endif
     struct list child_returnstats;
-    struct thread_return_stat *trs;
+    struct thread_return_status *trs;
     struct thread * parent;
     struct list f_lst;
     uint32_t f_count;
     uint32_t fd_max;
 
-#endif
     /*! Owned by thread.c. */
     /**@{*/
     unsigned magic;                     /* Detects stack overflow. */

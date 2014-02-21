@@ -13,7 +13,7 @@
 #include "devices/shutdown.h"
 #include "userprog/pagedir.h"
 
-staitic struct lock filesys_lock;
+static struct lock filesys_lock;
 
 static void syscall_handler(struct intr_frame *);
 bool checkva(const void* va);

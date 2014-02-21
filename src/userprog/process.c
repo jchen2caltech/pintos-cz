@@ -67,7 +67,6 @@ static void start_process(void *file_name_) {
     struct intr_frame if_;
     bool success;
     struct thread *cur;
-    struct thread_return_stat *trs;
 
     
     /* Initialize interrupt frame and load executable. */
@@ -82,7 +81,7 @@ static void start_process(void *file_name_) {
     palloc_free_page(file_name);
     cur = thread_current();
     if (success) {
-        cur->trs = success;
+        cur->trs->stat = success;
         sema_up(&cur->trs->sem);
     }
     else {
@@ -136,10 +135,9 @@ void process_exit(void) {
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
     trs = NULL;
-    if (cur->parent) {
+    if (!cur->parent) {
         old_level = intr_disable();
         cur->trs->stat = -1;
-        list_remove(&cur->childelem);
         intr_set_level(old_level);
     }
 

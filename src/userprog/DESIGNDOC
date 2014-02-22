@@ -104,25 +104,23 @@ enum thread_type {
 
 struct thread {
 
-    enum thread_type type;
-
 #ifdef USERPROG
     /*! Owned by userprog/process.c. */
     /**@{*/
     uint32_t *pagedir;                  /*!< Page directory. */
     /**@{*/
     struct list child_returnstats;
-    struct list child_processes;
-    struct list_elem childelem;
     struct thread * parent;
     struct list f_lst;
     uint32_t f_count;
     uint32_t fd_max;
+    enum thread_type type;
+    struct thread_return_status *trs;
 #endif
 
 };
 
-struct thread_return_stat{
+struct thread_return_status {
     pid_t pid;
     struct semaphore sem;
     int stat;
@@ -130,13 +128,13 @@ struct thread_return_stat{
 };
 
 struct f_info {
-    // The file object
+    /* The file object */
     struct file* f;
-    // The position of current access
+    /* The position of current access */
     off_t pos;
-    // List element for the list of all files of a process
+    /* List element for the list of all files of a process */
     struct list_elem elem;
-    // file descriptor
+    /* file descriptor */
     uint32_t fd;
     
 };
@@ -146,6 +144,18 @@ f_info->f is the file object; f_info->pos is the position or file offset
 of file the process is current accessing; f_info-> elem, used to maintaining
 the corresponding list; f_info-> fd is the file descriptor assigned to
 this file.
+
+The thread_type type is used for identifying whether a thread belongs to the
+kernel or a user process, which decides whether an exit message will be
+printed when exiting this thread.
+
+The thread_return_status struct is used for storing return value of child
+processes. It is both stored in the child process thread (as the "trs" field),
+as well as in the parent process thread (pushed into "child_returnstats").
+
+Multiple fields are added to the thread struct. In addition to ones explained
+above, the f_count, f_lst and fd_max are used to keep track of files opened
+by the thread.
 
 >> B2: Describe how file descriptors are associated with open files.
 >> Are file descriptors unique within the entire OS or just within a
@@ -175,7 +185,9 @@ For both read and write, our implementation do the following steps.
 1) Check the buffer pointer (both its head and end) is inside the userprog 
 stack and is mapped. In this way, we ensures the userprog to only access
 the memory they are allowed to.
- 
+
+
+
 2) If fd is standard input or output, then either read with "input_getc"
 each charater by charater to buffer, or write from the buffer to std output
 with "putbuf."
@@ -214,6 +226,28 @@ address occurs.
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
 
+1). Based on the pid fed in, wait() will find the corresponding 
+thread_return_status struct that belongs to the child process, since
+they are all recorded in the parent process child_returnstats list. 
+
+2). It then makes a sema_down() call on
+the semaphore of the thread_return_status->sem.
+
+3). Since the semaphore is initialized to be 0 and it is only 
+incremented upon exiting of the child process, it is ensured that
+the parent will only be signaled when the child process exits. 
+
+4). When a child process is exiting, it signals the semaphore and
+set the "stat" field in the thread_return_status struct to its
+exit status. 
+
+5). When the parent thread returns from the sema_down() call, it
+will retrieve the "stat" field and destroy the thread_return_status
+struct. 
+
+6). When a parent thread exits, any non-retrieved return_status
+struct will also be free'd before freeing the thread. 
+
 >> B6: Any access to user program memory at a user-specified address
 >> can fail due to a bad pointer value.  Such accesses must cause the
 >> process to be terminated.  System calls are fraught with such
@@ -228,6 +262,8 @@ address occurs.
 >> paragraphs, describe the strategy or strategies you adopted for
 >> managing these issues.  Give an example.
 
+
+
 ---- SYNCHRONIZATION ----
 
 >> B7: The "exec" system call returns -1 if loading the new executable
@@ -235,12 +271,44 @@ address occurs.
 >> loading.  How does your code ensure this?  How is the load
 >> success/failure status passed back to the thread that calls "exec"?
 
+This is again enabled by the thread_return_status struct. Note that
+the semaphore contained in the struct is initialized to 0, so the
+original thread that calls "exec" will sema_down on the semaphore, 
+like in the "wait" syscall. 
+
+The child thread being forked will sema_up() the semaphore and put
+"success" or "fail" value in the struct as soon as the load is completed.
+This will signal the parent thread to retrieve the status. 
+
+It is different from "wait" in that in this case, the parent thread
+WILL retrieve the status from the struct no matter what. Thus the
+struct will be able to be reused for wait() and exit(). 
+
 >> B8: Consider parent process P with child process C.  How do you
 >> ensure proper synchronization and avoid race conditions when P
 >> calls wait(C) before C exits?  After C exits?  How do you ensure
 >> that all resources are freed in each case?  How about when P
 >> terminates without waiting, before C exits?  After C exits?  Are
 >> there any special cases?
+
+There isn't any special case. 
+
+1). P calls wait(C) before C exits:
+P will wait on C->trs->sem. C will signal C->trs->sem just before
+exiting. 
+
+2). P calls wait(C) after C exits:
+sema_down will return immediately, and P will be able to retrieve
+the return status of C and destroy the struct. 
+
+3). P terminates without waiting:
+If it has any running child left, it will label all of them as
+"orphan". Thus, when the childs are exiting, they will not signal
+the semaphore and will destroy the thread_return_status struct
+themselves.
+If it doesn't have any running child left, but it has thread_return_status
+that it hasn't retrieved or destroyed, it will free them all before exiting.
+
 
 ---- RATIONALE ----
 

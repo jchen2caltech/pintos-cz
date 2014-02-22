@@ -592,12 +592,14 @@ static void init_thread(struct thread *t, const char *name, int priority,
         sema_init(&trs->sem, 0);
         t->trs = trs;
         list_push_back(&(thread_current()->child_returnstats), &trs->elem);
-        
+        list_push_back(&thread_current()->child_processes, &t->child_elem);
         list_init(&t->f_lst);
         t->f_count = 2;
-        t->fd_max = 1; 
+        t->fd_max = 1;
     }
+    list_init(&t->child_processes);
     t->f_exe = NULL;
+    t->orphan = false;
 
 #endif
     

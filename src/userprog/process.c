@@ -126,6 +126,7 @@ int process_wait(tid_t child_tid) {
 void process_exit(void) {
     struct thread_return_status *trs;
     struct thread *cur = thread_current();
+    struct thread *ct;
     uint32_t *pd;
     enum intr_level old_level;
 
@@ -139,8 +140,24 @@ void process_exit(void) {
     }
     if (cur->type == THREAD_PROCESS)
         printf("%s: exit(%d)\n", cur->name, cur->trs->stat);
+    if (!cur->orphan) {
+        sema_up(&cur->trs->sem);
+        list_remove(&cur->child_elem);
+    } else {
+        free(cur->trs);
+    }
+    old_level = intr_disable();
+    while (!list_empty(&cur->child_processes)) {
+        ct = list_entry(list_pop_front(&cur->child_processes), struct thread,
+                        child_elem);
+        ct->orphan = true;
+    }
+    while (!list_empty(&cur->child_returnstats)) {
+        trs = list_entry(list_pop_front(&cur->child_returnstats), 
+                        struct thread_return_status, elem);
+        free(trs);
+    }
     intr_set_level(old_level);
-    sema_up(&cur->trs->sem);
     
     if (cur->f_exe){
         file_allow_write(cur->f_exe);

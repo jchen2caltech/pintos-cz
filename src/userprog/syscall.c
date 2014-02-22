@@ -18,9 +18,11 @@ static void syscall_handler(struct intr_frame *);
 bool checkva(const void* va);
 struct f_info *findfile(uint32_t fd);
 static uint32_t read4(struct intr_frame * f, int offset);
+static struct lock filesys_lock;
 
 
 void syscall_init(void) {
+    lock_init(&filesys_lock);
     intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 

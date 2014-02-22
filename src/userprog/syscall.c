@@ -13,7 +13,6 @@
 #include "devices/shutdown.h"
 #include "userprog/pagedir.h"
 
-static struct lock filesys_lock;
 
 static void syscall_handler(struct intr_frame *);
 bool checkva(const void* va);
@@ -22,11 +21,11 @@ static uint32_t read4(struct intr_frame * f, int offset);
 
 
 void syscall_init(void) {
-    lock_init(&filesys_lock);
     intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
-/*! Handler for each syscall.*/
+/*! Handler for each syscall. It reads the syscall-number from user stack
+    and calls the corresponding syscall function accordingly. */
 
 static void syscall_handler(struct intr_frame *f) {
     
@@ -144,14 +143,15 @@ void exit(int status) {
     thread_exit();
 }
 
-/*! execute */
+/*! execute a command-line */
 pid_t exec(const char *cmd_line) {
     if (checkva(cmd_line))
         return process_execute(cmd_line);
     exit(-1);
 }
 
-/*! wait */
+/*! wait for a child-process specified by pid, will return
+    its return status (-1 if killed or failed) */
 int wait(pid_t pid) {
     return process_wait(pid);
 }

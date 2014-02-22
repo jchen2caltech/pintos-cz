@@ -133,17 +133,17 @@ struct thread {
     /**@{*/
     uint32_t *pagedir;                  /*!< Page directory. */
     /**@{*/
-    struct list child_returnstats;
-    struct thread_return_status *trs;
-    struct list child_processes;
-    struct list_elem child_elem;
-    struct thread * parent;
-    struct list f_lst;
-    uint32_t f_count;
-    uint32_t fd_max;
-    enum thread_type type;
-    struct file* f_exe;
-    bool orphan;
+    struct list child_returnstats;      /*!< List of child process return-stats */
+    struct thread_return_status *trs;   /*!< Return-stats of this thread */
+    struct list child_processes;        /*!< List of child processes */
+    struct list_elem child_elem;        /*!< List element as parent's child */
+    struct thread * parent;             /*!< Parent thread */
+    struct list f_lst;                  /*!< List of opened files */
+    uint32_t f_count;                   /*!< Number of opened files */
+    uint32_t fd_max;                    /*!< Current largest file-descriptor number */
+    enum thread_type type;              /*!< PROCESS or KERNEL */
+    struct file* f_exe;                 /*!< Currently opened executable file */
+    bool orphan;                        /*!< Whether parent has perished */
 
 #endif
     /*! Owned by thread.c. */
@@ -154,13 +154,13 @@ struct thread {
 
 /*! The file info struct for each file accessed by a process */
 struct f_info {
-    // The file object
+    /* The file object */
     struct file* f;
-    // The position of current access
+    /* The position of current access */
     off_t pos;
-    // List element for the list of all files of a process
+    /* List element for the list of all files of a process */
     struct list_elem elem;
-    // file descriptor
+    /* file descriptor */
     uint32_t fd;
     
 };

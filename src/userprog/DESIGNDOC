@@ -8,15 +8,16 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Jianchi Chen jchen2@caltech.edu
+Taokun Zheng tzheng@caltech.edu
 
 >> Specify how many late tokens you are using on this assignment:  
 
+We're using 2 late tokens. 
+
 >> What is the Git repository and commit hash for your submission?
 
-   Repository URL:  
+   Repository URL:  https://github.com/jchen2caltech/pintos-cz.git
    commit ...
 
 ---- PRELIMINARIES ----
@@ -262,7 +263,19 @@ struct will also be free'd before freeing the thread.
 >> paragraphs, describe the strategy or strategies you adopted for
 >> managing these issues.  Give an example.
 
+This comes down to two parts: extensive pointer checking and error
+handling. Whenever the syscall is passed in with a pointer, a string,
+or a buffer, it always check the validity of it through methods provided
+in vaddr.h, to prevent the occuring of page_fault. Specifically, we check
+if the pointer is NULL, if it is in the user space, and if it has been
+mapped. 
+In terms of error handling, the principle is that the thread keeps what
+it has allocated, and will free all of them if there is any left. 
 
+For example, if an error occurs before a user program can close all its
+open files, the thread_exit() function will go through the t->f_lst which
+contians the descriptors for all its open files, close all of them and
+free all the descriptor structs. 
 
 ---- SYNCHRONIZATION ----
 
@@ -301,11 +314,13 @@ exiting.
 sema_down will return immediately, and P will be able to retrieve
 the return status of C and destroy the struct. 
 
-3). P terminates without waiting:
+3). P terminates without waiting before all childs exit:
 If it has any running child left, it will label all of them as
 "orphan". Thus, when the childs are exiting, they will not signal
 the semaphore and will destroy the thread_return_status struct
 themselves.
+
+4). P terminates without waiting after all childs exit:
 If it doesn't have any running child left, but it has thread_return_status
 that it hasn't retrieved or destroyed, it will free them all before exiting.
 
@@ -314,6 +329,10 @@ that it hasn't retrieved or destroyed, it will free them all before exiting.
 
 >> B9: Why did you choose to implement access to user memory from the
 >> kernel in the way that you did?
+
+This way is simple and safe. We implemented read4() which reads byte
+by byte from user memory, and if any byte-read fails (or exceeds
+mapped user-page limit), it returns. 
 
 >> B10: What advantages or disadvantages can you see to your design
 >> for file descriptors?
@@ -340,6 +359,8 @@ the case.
 
 >> B11: The default tid_t to pid_t mapping is the identity mapping.
 >> If you changed it, what advantages are there to your approach?
+
+We didn't change it. 
 
                            SURVEY QUESTIONS
                            ================

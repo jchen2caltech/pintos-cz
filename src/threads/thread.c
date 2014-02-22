@@ -188,10 +188,12 @@ tid_t thread_create(const char *name, int priority, thread_func *function,
 #ifdef USERPROG
     return thread_create2(name, priority, function, aux, THREAD_KERNEL);
 }
+/* A stub for creating USER-PROCESS thread */
 
 tid_t thread_create2(const char *name, int priority, thread_func *function, 
                     void *aux, enum thread_type type) {
 #endif
+
     struct thread *t;
     struct kernel_thread_frame *kf;
     struct switch_entry_frame *ef;
@@ -294,6 +296,11 @@ tid_t thread_tid(void) {
     return thread_current()->tid;
 }
 #ifdef USERPROG
+
+/*! Finds the child process thread_return_status struct according to
+    a thread pid. Will return NULL if the passed-in pid is not a
+    running/recently exited child process of the current thread. */
+
 struct thread_return_status *thread_findchild(pid_t pid) {
     struct thread *t, *ct;
     struct list_elem *ce;
@@ -327,12 +334,14 @@ void thread_exit(void) {
 #ifdef USERPROG
     process_exit();
     t = thread_current();
+    /* Free all remaining opened files */
     while (!list_empty(&t->f_lst)) {
         ce = list_pop_front(&t->f_lst);
         cf = list_entry(ce, struct f_info, elem);
         file_close(cf->f);
         free(cf);
     }
+    /* Free all remaining child-returnstats */
     while (!list_empty(&t->child_returnstats)) {
         ce = list_pop_front(&t->child_returnstats);
         ctrs = list_entry(ce, struct thread_return_status, elem);

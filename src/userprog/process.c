@@ -100,9 +100,9 @@ static void start_process(void *file_name_) {
     If TID is invalid or if it was not a child of the calling process, or if
     process_wait() has already been successfully called for the given TID,
     returns -1 immediately, without waiting.
-
-    This function will be implemented in problem 2-2.  For now, it does
-    nothing. */
+    Once returned from sema_down(), remove the trs from thread list and
+    free the trs struct.
+ */
 int process_wait(tid_t child_tid) {
     struct thread *cur;
     struct thread_return_status *trs;
@@ -122,7 +122,10 @@ int process_wait(tid_t child_tid) {
     return status;
 }
 
-/*! Free the current process's resources. */
+/*! Free the current process's resources, signal its parent process if there
+    is any, and put its return status into the thread_return_status if it
+    it not an orphan. 
+ */
 void process_exit(void) {
     struct thread_return_status *trs;
     struct thread *cur = thread_current();
@@ -138,20 +141,26 @@ void process_exit(void) {
         cur->trs->stat = -1;
         intr_set_level(old_level);
     }
+    /* Print exit message if and only if it is a USER-PROCESS */
     if (cur->type == THREAD_PROCESS)
         printf("%s: exit(%d)\n", cur->name, cur->trs->stat);
+
+    /* Signal parent if there is any; otherwise free the return_status */
     if (!cur->orphan) {
         sema_up(&cur->trs->sem);
         list_remove(&cur->child_elem);
     } else {
         free(cur->trs);
     }
+
+    /* Tell all the childs that they have become orphans */
     old_level = intr_disable();
     while (!list_empty(&cur->child_processes)) {
         ct = list_entry(list_pop_front(&cur->child_processes), struct thread,
                         child_elem);
         ct->orphan = true;
     }
+    /* Free any unretrieved thread_return_status from childs */
     while (!list_empty(&cur->child_returnstats)) {
         trs = list_entry(list_pop_front(&cur->child_returnstats), 
                         struct thread_return_status, elem);
@@ -159,6 +168,7 @@ void process_exit(void) {
     }
     intr_set_level(old_level);
     
+    /* Close and allow write on executable file if any is opened */
     if (cur->f_exe){
         file_allow_write(cur->f_exe);
         file_close(cur->f_exe);

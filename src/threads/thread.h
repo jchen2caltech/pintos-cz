@@ -177,9 +177,10 @@ void thread_tick(void);
 void thread_print_stats(void);
 
 typedef void thread_func(void *aux);
+#ifdef USERPROG
 tid_t thread_create2(const char *name, int priority, thread_func *, void *,
                      enum thread_type type);
-
+#endif
 tid_t thread_create(const char *name, int priority, thread_func *, void *);
 
 void thread_block(void);

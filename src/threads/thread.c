@@ -185,11 +185,13 @@ void thread_print_stats(void) {
 
 tid_t thread_create(const char *name, int priority, thread_func *function,
                     void *aux) {
+#ifdef USERPROG
     return thread_create2(name, priority, function, aux, THREAD_KERNEL);
 }
 
 tid_t thread_create2(const char *name, int priority, thread_func *function, 
                     void *aux, enum thread_type type) {
+#endif
     struct thread *t;
     struct kernel_thread_frame *kf;
     struct switch_entry_frame *ef;
@@ -207,8 +209,9 @@ tid_t thread_create2(const char *name, int priority, thread_func *function,
     t->tid = allocate_tid();
     tid = t->tid;
     init_thread(t, name, priority, tid);
+#ifdef USERPROG
     t->type = type;
-
+#endif
     /* Stack frame for kernel_thread(). */
     kf = alloc_frame(t, sizeof *kf);
     kf->eip = NULL;
@@ -290,7 +293,7 @@ struct thread * thread_current(void) {
 tid_t thread_tid(void) {
     return thread_current()->tid;
 }
-
+#ifdef USERPROG
 struct thread_return_status *thread_findchild(pid_t pid) {
     struct thread *t, *ct;
     struct list_elem *ce;
@@ -310,7 +313,7 @@ struct thread_return_status *thread_findchild(pid_t pid) {
     intr_set_level(old_level);
     return trs;
 }
-
+#endif
 /*! Deschedules the current thread and destroys it.  Never
     returns to the caller. */
 void thread_exit(void) {

@@ -4,6 +4,10 @@
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "userprog/process.h"
+#include "threads/vaddr.h"
+#include "vm/frame.h"
+#include "vm/page.h"
 
 /*! Number of page faults processed. */
 static long long page_fault_cnt;
@@ -137,11 +141,11 @@ static void page_fault(struct intr_frame *f) {
     user = (f->error_code & PF_U) != 0;
     
     if (not_present) {
-        fault_addr &= PGMASK;
+        fault_addr = (void *) ((uint32_t) fault_addr & PGMASK);
         st = find_supp_table(fault_addr);
         
         if (st == NULL) {
-            fprintf(stderr, "Cannot find the supplemental page table...\n");
+            printf("Cannot find the supplemental page table...\n");
             exit(-1);
         }
         
@@ -151,15 +155,15 @@ static void page_fault(struct intr_frame *f) {
         
         if (st->zero_bytes != PGSIZE) {
             if (file_read(st->file, fr->physical_addr, st->read_bytes) !=
-                (int) st->page_read_bytes) {
-                fprintf(stderr, "File read bytes not as expected.\n");
+                (int) st->read_bytes) {
+                printf("File read bytes not as expected.\n");
                 exit(-1);
             }   
         }
         
         memset(fr->physical_addr + st->read_bytes, 0, st->zero_bytes);
-        if (!install_page(fault_addr, fr->physical_addr, writable)){
-            fprintf(stderr, "Cannot install the page. \n");
+        if (!install_page(fault_addr, fr->physical_addr, st->writable)){
+            printf("Cannot install the page. \n");
             exit(-1);
         }
         

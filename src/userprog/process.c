@@ -19,6 +19,9 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "userprog/process.h"
+#include "vm/frame.h"
+#include "vm/page.h"
 
 static thread_func start_process NO_RETURN;
 static bool load(const char *cmdline, void (**eip)(void), void **esp);
@@ -393,9 +396,7 @@ done:
     return success;
 }
 
-/* load() helpers. */
 
-static bool install_page(void *upage, void *kpage, bool writable);
 
 /*! Checks whether PHDR describes a valid, loadable segment in
     FILE and returns true if so, false otherwise. */
@@ -455,7 +456,6 @@ static bool validate_segment(const struct Elf32_Phdr *phdr, struct file *file) {
 static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
                          uint32_t read_bytes, uint32_t zero_bytes,
                          bool writable) {
-    struct supp_table* st;
     
     ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
     ASSERT(pg_ofs(upage) == 0);
@@ -470,22 +470,8 @@ static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
         size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
         size_t page_zero_bytes = PGSIZE - page_read_bytes;
         
-        st =(struct supp_table*) malloc(sizeof(struct supp_table));
-        
-        if (st == NULL) {
-            fprintf(stderr, "Cannot allocate sup_table.\n");
-            exit(-1);
-        }
-        
-        st->file = file;
-        st->ofs = ofs;
-        st->upage = upage;
-        st->read_bytes = page_read_bytes;
-        st->zero_bytes = page_zero_bytes;
-        st->writable = writable;
-        st->swap_slot = NULL;
-        st->fr = NULL;
-        list_push_back(&supp_table_lst, st->elem);
+        create_supp_table(file, ofs, upage, page_read_bytes, 
+                               page_zero_bytes, writable);
 
         /* Get a page of memory. */
         /*uint8_t *kpage = palloc_get_page(PAL_USER);
@@ -540,7 +526,8 @@ static bool setup_stack(void **esp) {
     with palloc_get_page().
     Returns true on success, false if UPAGE is already mapped or
     if memory allocation fails. */
-static bool install_page(void *upage, void *kpage, bool writable) {
+
+bool install_page(void *upage, void *kpage, bool writable) {
     struct thread *t = thread_current();
 
     /* Verify that there's not already a page at that virtual

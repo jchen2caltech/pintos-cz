@@ -141,8 +141,8 @@ static void page_fault(struct intr_frame *f) {
     user = (f->error_code & PF_U) != 0;
     
     if (not_present) {
-        printf("Fault thread at %s\n", thread_current()->name);
-        printf("Fault address at %x\n", (uint32_t) fault_addr);
+        /*printf("Fault thread at %s\n", thread_current()->name);*/
+        /*printf("Fault address at %x\n", (uint32_t) fault_addr);*/
         fault_addr = pg_round_down(fault_addr);
         st = find_supp_table(fault_addr);
         
@@ -169,7 +169,7 @@ static void page_fault(struct intr_frame *f) {
             printf("Cannot install the page. \n");
             exit(-1);
         }
-        printf("Found the page!!\n");
+        /*printf("Found the page!!\n");*/
     } else {
 
         /* To implement virtual memory, delete the rest of the function

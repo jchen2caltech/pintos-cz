@@ -455,40 +455,61 @@ static bool validate_segment(const struct Elf32_Phdr *phdr, struct file *file) {
 static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
                          uint32_t read_bytes, uint32_t zero_bytes,
                          bool writable) {
+    struct supp_table* st;
+    
     ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
     ASSERT(pg_ofs(upage) == 0);
     ASSERT(ofs % PGSIZE == 0);
+    
 
-    file_seek(file, ofs);
+    /*file_seek(file, ofs);*/
     while (read_bytes > 0 || zero_bytes > 0) {
         /* Calculate how to fill this page.
            We will read PAGE_READ_BYTES bytes from FILE
            and zero the final PAGE_ZERO_BYTES bytes. */
         size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
         size_t page_zero_bytes = PGSIZE - page_read_bytes;
+        
+        st =(struct supp_table*) malloc(sizeof(struct supp_table));
+        
+        if (st == NULL) {
+            fprintf(stderr, "Cannot allocate sup_table.\n");
+            exit(-1);
+        }
+        
+        st->file = file;
+        st->ofs = ofs;
+        st->upage = upage;
+        st->read_bytes = page_read_bytes;
+        st->zero_bytes = page_zero_bytes;
+        st->writable = writable;
+        st->swap_slot = NULL;
+        st->fr = NULL;
+        list_push_back(&supp_table_lst, st->elem);
 
         /* Get a page of memory. */
-        uint8_t *kpage = palloc_get_page(PAL_USER);
+        /*uint8_t *kpage = palloc_get_page(PAL_USER);
         if (kpage == NULL)
-            return false;
+            return false;*/
 
         /* Load this page. */
-        if (file_read(file, kpage, page_read_bytes) != (int) page_read_bytes) {
+        /*if (file_read(file, kpage, page_read_bytes) != (int) page_read_bytes) {
             palloc_free_page(kpage);
             return false;
         }
         memset(kpage + page_read_bytes, 0, page_zero_bytes);
 
         /* Add the page to the process's address space. */
-        if (!install_page(upage, kpage, writable)) {
+        /*if (!install_page(upage, kpage, writable)) {
             palloc_free_page(kpage);
             return false; 
-        }
-
+        }*/
+        
         /* Advance. */
         read_bytes -= page_read_bytes;
         zero_bytes -= page_zero_bytes;
         upage += PGSIZE;
+        ofs += page_read_bytes;
     }
     return true;
 }

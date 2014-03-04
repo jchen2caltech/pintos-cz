@@ -247,8 +247,10 @@ int filesize(uint32_t fd) {
 /*! Read from file */
 int read(uint32_t fd, void *buffer, unsigned size) {
     /* Check the validity of given pointer */
-    if ((!checkva(buffer)) || (!checkva(buffer + size)))
+    if ((!checkva(buffer)) || (!checkva(buffer + size))){
+        /*printf("Bad Pointer:%x.\n", buffer);*/
         exit(-1);
+    }
     
     int read_size = 0;
     if (fd == STDIN_FILENO) {
@@ -351,7 +353,8 @@ void close(uint32_t fd) {
 
 bool checkva(const void* va){
     struct thread *t = thread_current();
-    return (is_user_vaddr(va) && (pagedir_get_page(t->pagedir, va) != NULL));
+    /*return (is_user_vaddr(va) && (pagedir_get_page(t->pagedir, va) != NULL));*/
+    return (is_user_vaddr(va) && va);
 }
 
 /*! Given a fd, then return the f_info struct in the current thread. */

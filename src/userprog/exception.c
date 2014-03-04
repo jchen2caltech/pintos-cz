@@ -141,7 +141,9 @@ static void page_fault(struct intr_frame *f) {
     user = (f->error_code & PF_U) != 0;
     
     if (not_present) {
-        fault_addr = (void *) ((uint32_t) fault_addr & PGMASK);
+        printf("Fault thread at %s\n", thread_current()->name);
+        printf("Fault address at %x\n", (uint32_t) fault_addr);
+        fault_addr = pg_round_down(fault_addr);
         st = find_supp_table(fault_addr);
         
         if (st == NULL) {
@@ -154,6 +156,7 @@ static void page_fault(struct intr_frame *f) {
         st->fr = fr;
         
         if (st->zero_bytes != PGSIZE) {
+            file_seek(st->file, st->ofs);
             if (file_read(st->file, fr->physical_addr, st->read_bytes) !=
                 (int) st->read_bytes) {
                 printf("File read bytes not as expected.\n");
@@ -166,7 +169,7 @@ static void page_fault(struct intr_frame *f) {
             printf("Cannot install the page. \n");
             exit(-1);
         }
-        
+        printf("Found the page!!\n");
     } else {
 
         /* To implement virtual memory, delete the rest of the function

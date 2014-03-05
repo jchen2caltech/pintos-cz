@@ -49,7 +49,7 @@ void swap_in(void *frame, size_t position) {
     lock_acquire(&swap_lock);
     if (!bitmap_test(swap_bm, position))
         PANIC("attempt to swap in a free frame!\n");
-    bitmap_flip(swap_map, position);
+    bitmap_flip(swap_bm, position);
     for (i = 0; i < SECTORS_PER_PAGE; i++)
         block_read(swap_block, position * SECTORS_PER_PAGE + i,
                    (uint8_t *)frame + i * BLOCK_SECTOR_SIZE);

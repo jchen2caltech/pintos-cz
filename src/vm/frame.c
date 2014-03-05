@@ -12,7 +12,7 @@
 
 static struct frame_table f_table;
 
-struct frame_table_entry *evict_frame(void);
+void * frame_evict(enum palloc_flags flag);
 
 void frame_table_init(void) {
     list_init(&f_table.table);
@@ -28,7 +28,7 @@ struct frame_table_entry *obtain_frame(enum palloc_flags flag,
     page = palloc_get_page(flag);
     if (!page)
         page = frame_evict(flag);
-    if (!page) {
+    if (!page) 
         PANIC("run out of frames!\n");
 
     newframe = (struct frame_table_entry *)\

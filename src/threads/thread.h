@@ -133,7 +133,8 @@ struct thread {
     /*! Owned by userprog/process.c. */
     /**@{*/
     uint32_t *pagedir;                  /*!< Page directory. */
-    struct hash s_table;                /*! Supplemental page table
+    struct hash s_table;                /*! Supplemental page table*/
+    uint32_t stack_no;                  /*! total number of stack of PGSIZE allocated */
     /**@{*/
     struct list child_returnstats;      /*!< List of child process return-stats */
     struct thread_return_status *trs;   /*!< Return-stats of this thread */

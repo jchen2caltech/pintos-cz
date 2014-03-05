@@ -147,11 +147,12 @@ static void page_fault(struct intr_frame *f) {
         st = find_supp_table(fault_addr);
         
         if (st == NULL) {
-            /*printf("Cannot find the supplemental page table...\n");*/
-            exit(-1);
+            printf("Cannot find the supplemental page table...\n");
+            
+                exit(-1);
+ 
         }
-        
-        fr = obtain_frame(fault_addr);
+        fr = obtain_frame(PAL_USER, st);
         fr->spt = st;
         st->fr = fr;
         
@@ -163,13 +164,14 @@ static void page_fault(struct intr_frame *f) {
                 exit(-1);
             }   
         }
-        
+            
         memset(fr->physical_addr + st->read_bytes, 0, st->zero_bytes);
         if (!install_page(fault_addr, fr->physical_addr, st->writable)){
             /*printf("Cannot install the page. \n");*/
             exit(-1);
         }
-        /*printf("Found the page!!\n");*/
+            /*printf("Found the page!!\n");*/
+        
     } else {
 
         /* To implement virtual memory, delete the rest of the function

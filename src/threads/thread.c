@@ -217,6 +217,7 @@ tid_t thread_create2(const char *name, int priority, thread_func *function,
 #ifdef USERPROG
     t->type = type;
     supp_table_init(&(t->s_table));
+    t->stack_no = 0;
 #endif
     /* Stack frame for kernel_thread(). */
     kf = alloc_frame(t, sizeof *kf);

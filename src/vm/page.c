@@ -16,7 +16,7 @@ void supp_table_init(void) {
 
 
 struct supp_table * find_supp_table(void *virtual_addr){
-    /*printf("Looking for supp_page %x\n", virtual_addr);*/
+    printf("Looking for supp_page %x\n", virtual_addr);
     struct list_elem *e;
     for (e = list_begin(&supp_table_lst); e != list_end(&supp_table_lst); 
         e = list_next(e)){
@@ -31,12 +31,12 @@ struct supp_table * create_supp_table(struct file *file, off_t ofs,
                                       uint8_t *upage, uint32_t read_bytes,
                                       uint32_t zero_bytes, bool writable) {
     ASSERT(read_bytes + zero_bytes == PGSIZE);
-    /*printf("Creating supp_page %x\n", upage);*/
+    printf("Creating supp_page %x in thread: %s\n", upage, thread_current()->name);
     struct supp_table* st;
     st =(struct supp_table*) malloc(sizeof(struct supp_table));
         
     if (st == NULL) {
-        printf("Cannot allocate sup_table.\n");
+        /*printf("Cannot allocate sup_table.\n");*/
         exit(-1);
     }
         

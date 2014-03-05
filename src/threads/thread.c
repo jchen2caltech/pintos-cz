@@ -359,7 +359,7 @@ void thread_exit(void) {
        and schedule another process.  That process will destroy us
        when it calls thread_schedule_tail(). */
     intr_disable();
-    ASSERT(list_empty(&thread_current()->locks));
+    /*ASSERT(list_empty(&thread_current()->locks));*/
     list_remove(&thread_current()->allelem);
     thread_current()->status = THREAD_DYING;
     schedule();

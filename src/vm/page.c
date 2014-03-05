@@ -42,6 +42,8 @@ struct supp_table * create_supp_table(struct file *file, off_t ofs,
         exit(-1);
     }
         
+    st->type = SPT_FILE;
+    st->swap_index = 0;
     st->file = file;
     st->ofs = ofs;
     st->upage = upage;

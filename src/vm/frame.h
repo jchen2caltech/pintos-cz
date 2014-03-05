@@ -10,7 +10,6 @@
 struct frame_table {
     struct list table;
     struct lock lock;
-    struct bitmap *frames;
 };
 
 struct frame_table_entry {
@@ -20,7 +19,7 @@ struct frame_table_entry {
     struct thread *owner;
 };
 
-void frame_table_init(int num_frames);
+void frame_table_init(void);
 
 struct frame_table_entry *obtain_frame(enum palloc_flags flag, 
                                        struct supp_table *pte);

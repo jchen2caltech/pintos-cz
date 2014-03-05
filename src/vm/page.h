@@ -4,10 +4,15 @@
 #include "userprog/syscall.h"
 #include <hash.h>
 #include "vm/frame.h"
+#define SPT_FILE 0
+#define SPT_SWAP 1
+#define SPT_NULL 2
 
 struct supp_table {
    struct file* file;
    off_t ofs;
+   int type;
+   size_t swap_index;
    uint8_t * upage;
    uint32_t read_bytes;
    uint32_t zero_bytes;

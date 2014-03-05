@@ -9,16 +9,14 @@
 #include <stdlib.h>
 #include <list.h>
 #include <string.h>
-#include <bitmap.h>
 
 static struct frame_table f_table;
 
 struct frame_table_entry *evict_frame(void);
 
-void frame_table_init(int num_frames) {
+void frame_table_init(void) {
     list_init(&f_table.table);
-    lock_init(&(&f_table)->lock);
-    (&f_table)->frames = bitmap_create((size_t)num_frames);
+    lock_init(&f_table.lock);
 }
 
 
@@ -26,34 +24,52 @@ struct frame_table_entry *obtain_frame(enum palloc_flags flag,
                                        struct supp_table *pte) {
     void *page;
     struct frame_table_entry *newframe;
-    size_t idx;
 
-    idx = bitmap_scan_and_flip((&f_table)->frames, 0, 1, false);
-    if (idx == BITMAP_ERROR)
-        PANIC("Run out of frames\n");
-    else {
-        page = palloc_get_page(flag);
-        if (page) {
-            newframe = (struct frame_table_entry *)\
-                       malloc(sizeof(struct frame_table_entry));
-            if (!newframe)
-                PANIC("malloc failure\n");
-            newframe->physical_addr = page;
-            newframe->owner = thread_current();
-            newframe->spt = pte;
-        }
-        else {
-            PANIC("Run out of frames\n");
-        }
-        list_push_back(&f_table.table, &newframe->elem);
-    }
+    page = palloc_get_page(flag);
+    if (!page)
+        page = frame_evict(flag);
+    if (!page) {
+        PANIC("run out of frames!\n");
+
+    newframe = (struct frame_table_entry *)\
+               malloc(sizeof(struct frame_table_entry));
+    if (!newframe)
+        PANIC("malloc failure\n");
+    newframe->physical_addr = page;
+    newframe->owner = thread_current();
+    newframe->spt = pte;
+    lock_acquire(&f_table.lock);
+    list_push_back(&f_table.table, &newframe->elem);
+    lock_release(&f_table.lock);
     return newframe;
 }
 
-void * frame_evict(void *virtual_addr) {
+/* clock algorithm: circularly loop through every frame */
+void * frame_evict(enum palloc_flags flag) {
+    struct list_elem *ce;
+    struct thread *ct;
+    struct frame_table_entry *cf;
 
     lock_acquire(&f_table.lock);
-
-
-    lock_release(&f_table.lock);
+    while (true) {
+        if (list_empty(&f_table.table))
+            return NULL;
+        ce = list_pop_front(&f_table.table);
+        cf = list_entry(ce, struct frame_table_entry, elem);
+        ct = cf->owner;
+        if (pagedir_is_accessed(ct->pagedir, cf->spt->upage))
+            pagedir_set_accessed(ct->pagedir, cf->spt->upage, false);
+        else {
+            if (pagedir_is_dirty(ct->pagedir, cf->spt->upage)) {
+                cf->spt->type = SPT_SWAP;
+                cf->spt->swap_index = swap_out(cf->physical_addr);
+            }
+            pagedir_clear_page(ct->pagedir, cf->spt->upage);
+            palloc_free_page(cf->physical_addr);
+            free(cf);
+            lock_release(&f_table.lock);
+            return palloc_get_page(flag);
+        }
+        list_push_back(&f_table.table, ce);
+    }
 }

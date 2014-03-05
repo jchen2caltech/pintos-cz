@@ -114,7 +114,18 @@ static void syscall_handler(struct intr_frame *f) {
             fd = (uint32_t) read4(f, 4);
             close(fd);
             break;
-            
+
+        case SYS_MMAP:
+            fd = (uint32_t) read4(f, 4);
+            buffer = (void*) read4(f, 8);
+            f->eax = (uint32_t) mmap(fd, buffer);
+            break;
+
+        case SYS_MUNMAP:
+            mapping = (mapid_t) munmap(f, 4);
+            munmap(mapping);
+            break;
+
         default:
             exit(-1);
             break;

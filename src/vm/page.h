@@ -18,6 +18,7 @@ struct supp_table {
    uint32_t read_bytes;
    uint32_t zero_bytes;
    bool writable;
+   bool pinned;
    struct swap_table* swap_slot;
    struct frame_table_entry* fr;
    struct hash_elem elem; 

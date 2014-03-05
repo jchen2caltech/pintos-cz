@@ -52,6 +52,7 @@ struct supp_table * create_supp_table(struct file *file, off_t ofs,
     st->writable = writable;
     st->swap_slot = NULL;
     st->fr = NULL;
+    st->pinned = true
     hash_insert(&(thread_current()->s_table), &st->elem);
     
     return st;
@@ -69,6 +70,9 @@ struct supp_table * create_stack_supp_table(void* virtual_addr){
     st->writable = true;
     st->upage = virtual_addr;
     st->fr = NULL;
+    st->pinned = true;
+    if (intr_context())
+        st->pinned = false;
     hash_insert(&(thread_current()->s_table), &st->elem);
     return st;
 }

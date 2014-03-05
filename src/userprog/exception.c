@@ -148,12 +148,12 @@ static void page_fault(struct intr_frame *f) {
         
         st = find_supp_table(pg_round_down(fault_addr));
         
-        if (st == NULL) {
+        if (!st) {
             /*printf("Cannot find the supplemental page table...\n");*/
             stack_no = thread_current()->stack_no;
             if ((uint32_t)f->esp + 32 >= (uint32_t)fault_addr && 
                 (uint32_t)f->esp - 32 <= (uint32_t)fault_addr
-                 && fault_addr <= PHYS_BASE - stack_no * PGSIZE){
+                 && fault_addr <= PHYS_BASE - stack_no * PGSIZE) {
                 st = create_stack_supp_table(pg_round_down(fault_addr));
                 fr = obtain_frame(PAL_USER | PAL_ZERO, st);
                 st->fr = fr;
@@ -162,13 +162,15 @@ static void page_fault(struct intr_frame *f) {
                     exit(-1);
                 return;
             }
-            else { exit(-1);}
- 
+            else { 
+              exit(-1);
+            }
         }
         
         fr = obtain_frame(PAL_USER, st);
         fr->spt = st;
         st->fr = fr;
+        st->pinned = true;
 
         if (st->type == SPT_SWAP) {
             swap_in(st->upage, st->swap_index);
@@ -189,6 +191,7 @@ static void page_fault(struct intr_frame *f) {
             /*printf("Cannot install the page. \n");*/
             exit(-1);
         }
+        st->pinned = false;
             /*printf("Found the page!!\n");*/
         
     } else {

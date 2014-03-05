@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include <filesys/file.h>
 #include "synch.h"
+#include <hash.h>
 
 /*! States in a thread's life cycle. */
 enum thread_status {
@@ -132,6 +133,7 @@ struct thread {
     /*! Owned by userprog/process.c. */
     /**@{*/
     uint32_t *pagedir;                  /*!< Page directory. */
+    struct hash s_table;                /*! Supplemental page table
     /**@{*/
     struct list child_returnstats;      /*!< List of child process return-stats */
     struct thread_return_status *trs;   /*!< Return-stats of this thread */

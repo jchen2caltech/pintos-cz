@@ -141,13 +141,13 @@ static void page_fault(struct intr_frame *f) {
     user = (f->error_code & PF_U) != 0;
     
     if (not_present) {
-        printf("Fault thread at %s\n", thread_current()->name);
-        printf("Fault address at %x\n", (uint32_t) fault_addr);
+        /*printf("Fault thread at %s\n", thread_current()->name);
+        printf("Fault address at %x\n", (uint32_t) fault_addr);*/
         fault_addr = pg_round_down(fault_addr);
         st = find_supp_table(fault_addr);
         
         if (st == NULL) {
-            printf("Cannot find the supplemental page table...\n");
+            /*printf("Cannot find the supplemental page table...\n");*/
             exit(-1);
         }
         
@@ -159,17 +159,17 @@ static void page_fault(struct intr_frame *f) {
             file_seek(st->file, st->ofs);
             if (file_read(st->file, fr->physical_addr, st->read_bytes) !=
                 (int) st->read_bytes) {
-                printf("File read bytes not as expected.\n");
+                /*printf("File read bytes not as expected.\n");*/
                 exit(-1);
             }   
         }
         
         memset(fr->physical_addr + st->read_bytes, 0, st->zero_bytes);
         if (!install_page(fault_addr, fr->physical_addr, st->writable)){
-            printf("Cannot install the page. \n");
+            /*printf("Cannot install the page. \n");*/
             exit(-1);
         }
-        printf("Found the page!!\n");
+        /*printf("Found the page!!\n");*/
     } else {
 
         /* To implement virtual memory, delete the rest of the function

@@ -4,6 +4,7 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+#include <hash.h>
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -96,7 +97,6 @@ void thread_init(void) {
     lock_init(&tid_lock);
     list_init(&ready_list);
     list_init(&all_list);
-    supp_table_init();
     load_avg = 0;
 
     /* Set up a thread structure for the running thread. */
@@ -216,6 +216,7 @@ tid_t thread_create2(const char *name, int priority, thread_func *function,
     init_thread(t, name, priority, tid);
 #ifdef USERPROG
     t->type = type;
+    supp_table_init(&(t->s_table));
 #endif
     /* Stack frame for kernel_thread(). */
     kf = alloc_frame(t, sizeof *kf);

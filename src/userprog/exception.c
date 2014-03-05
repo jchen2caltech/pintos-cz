@@ -8,6 +8,7 @@
 #include "threads/vaddr.h"
 #include "vm/frame.h"
 #include "vm/page.h"
+#include "vm/swap.h"
 
 /*! Number of page faults processed. */
 static long long page_fault_cnt;
@@ -155,6 +156,11 @@ static void page_fault(struct intr_frame *f) {
         fr = obtain_frame(PAL_USER, st);
         fr->spt = st;
         st->fr = fr;
+
+        if (st->type == SPT_SWAP) {
+            swap_in(st->upage, st->swap_index);
+            st->upage = SPT_NULL;
+        }
         
         if (st->zero_bytes != PGSIZE) {
             file_seek(st->file, st->ofs);

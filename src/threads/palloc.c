@@ -58,6 +58,7 @@ void palloc_init(size_t user_page_limit) {
     init_pool(&user_pool, free_start + kernel_pages * PGSIZE,
               user_pages, "user pool");
     frame_table_init();
+
 }
 
 /*! Obtains and returns a group of PAGE_CNT contiguous free pages.

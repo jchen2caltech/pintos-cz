@@ -22,6 +22,7 @@
 #include "threads/palloc.h"
 #include "threads/pte.h"
 #include "threads/thread.h"
+#include "vm/swap.h"
 
 #ifdef USERPROG
 
@@ -131,6 +132,7 @@ int main(void) {
     ide_init();
     locate_block_devices();
     filesys_init(format_filesys);
+    swap_init();
 #endif
 
     printf("Boot complete.\n");

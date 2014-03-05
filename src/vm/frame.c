@@ -38,7 +38,8 @@ struct frame_table_entry *obtain_frame(enum palloc_flags flag,
     newframe->physical_addr = page;
     newframe->owner = thread_current();
     newframe->spt = pte;
-    lock_acquire(&f_table.lock);
+    if (f_table.lock.holder != thread_current())
+        lock_acquire(&f_table.lock);
     list_push_back(&f_table.table, &newframe->elem);
     lock_release(&f_table.lock);
     return newframe;
@@ -49,8 +50,9 @@ void * frame_evict(enum palloc_flags flag) {
     struct list_elem *ce;
     struct thread *ct;
     struct frame_table_entry *cf;
-
-    lock_acquire(&f_table.lock);
+    
+    if (f_table.lock.holder != thread_current())
+        lock_acquire(&f_table.lock);
     while (true) {
         if (list_empty(&f_table.table))
             return NULL;

@@ -483,7 +483,7 @@ static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
             palloc_free_page(kpage);
             return false;
         }
-        memset(kpage + page_read_bytes, 0, page_zero_bytes);
+        memset(kpage + page_read_bytes, 0, page_zero_bytes);*/
 
         /* Add the page to the process's address space. */
         /*if (!install_page(upage, kpage, writable)) {
@@ -520,7 +520,7 @@ static bool setup_stack(void **esp) {
     struct supp_table * st;
     bool success = false;
     ASSERT(thread_current()->stack_no == 0);
-    st = create_stack_supp_table();
+    st = create_stack_supp_table(((uint8_t*) PHYS_BASE) - PGSIZE);
     fr = obtain_frame(PAL_USER | PAL_ZERO, st);
     st->fr = fr;
     thread_current()->stack_no = 1;

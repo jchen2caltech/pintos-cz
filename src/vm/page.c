@@ -57,7 +57,7 @@ struct supp_table * create_supp_table(struct file *file, off_t ofs,
     return st;
 }
 
-struct supp_table * create_stack_supp_table(void){
+struct supp_table * create_stack_supp_table(void* virtual_addr){
     struct supp_table* st;
     st =(struct supp_table*) malloc(sizeof(struct supp_table));
         
@@ -67,6 +67,7 @@ struct supp_table * create_stack_supp_table(void){
     }
     st->type = SPT_STACK;
     st->writable = true;
+    st->upage = virtual_addr;
     st->fr = NULL;
     hash_insert(&(thread_current()->s_table), &st->elem);
     return st;

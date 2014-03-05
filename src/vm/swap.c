@@ -27,8 +27,10 @@ size_t swap_out(void *frame) {
     size_t position, i;
 
     if (!swap_block || !swap_bm)
-        PANIC("swapping partition not present!\n");
-    lock_acquire(&swap_lock);
+        PANIC("swapping partition not present! block %d bm %d\n", 
+              (int)swap_block, (int) swap_bm);
+    if (swap_lock.holder != thread_current())
+        lock_acquire(&swap_lock);
 
     position = bitmap_scan_and_flip(swap_bm, 0, 1, 0);
     if (position == BITMAP_ERROR)
@@ -46,7 +48,8 @@ void swap_in(void *frame, size_t position) {
 
     if (!swap_block || !swap_bm)
         PANIC("swapping partition not present!\n");
-    lock_acquire(&swap_lock);
+    if (swap_lock.holder != thread_current())
+        lock_acquire(&swap_lock);
     if (!bitmap_test(swap_bm, position))
         PANIC("attempt to swap in a free frame!\n");
     bitmap_flip(swap_bm, position);

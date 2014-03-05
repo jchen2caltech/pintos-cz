@@ -195,7 +195,10 @@ void lock_acquire(struct lock *lock) {
 
     ASSERT(lock != NULL);
     ASSERT(!intr_context());
-    ASSERT(!lock_held_by_current_thread(lock));
+    /*ASSERT(!lock_held_by_current_thread(lock));*/
+    
+    if (lock_held_by_current_thread(lock))
+        return;
 
     old_level = intr_disable();
     if (!thread_mlfqs) {

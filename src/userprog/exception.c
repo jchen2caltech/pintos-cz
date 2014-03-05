@@ -145,23 +145,27 @@ static void page_fault(struct intr_frame *f) {
     if (not_present) {
         /*printf("Fault thread at %s\n", thread_current()->name);
         printf("Fault address at %x\n", (uint32_t) fault_addr);*/
-        fault_addr = pg_round_down(fault_addr);
-        st = find_supp_table(fault_addr);
+        
+        st = find_supp_table(pg_round_down(fault_addr));
         
         if (st == NULL) {
             /*printf("Cannot find the supplemental page table...\n");*/
             stack_no = thread_current()->stack_no;
             if ((uint32_t)f->esp + 32 >= (uint32_t)fault_addr && 
                 (uint32_t)f->esp - 32 <= (uint32_t)fault_addr
-                 && fault_addr < PHYS_BASE - stack_no * PGSIZE){
-                st = create_stack_supp_table();
+                 && fault_addr <= PHYS_BASE - stack_no * PGSIZE){
+                st = create_stack_supp_table(pg_round_down(fault_addr));
                 fr = obtain_frame(PAL_USER | PAL_ZERO, st);
                 st->fr = fr;
                 ++ thread_current()->stack_no;
+                if (!install_page(st->upage, fr->physical_addr, st->writable))
+                    exit(-1);
+                return;
             }
             else { exit(-1);}
  
         }
+        
         fr = obtain_frame(PAL_USER, st);
         fr->spt = st;
         st->fr = fr;
@@ -181,7 +185,7 @@ static void page_fault(struct intr_frame *f) {
         }
             
         memset(fr->physical_addr + st->read_bytes, 0, st->zero_bytes);
-        if (!install_page(fault_addr, fr->physical_addr, st->writable)){
+        if (!install_page(st->upage, fr->physical_addr, st->writable)){
             /*printf("Cannot install the page. \n");*/
             exit(-1);
         }

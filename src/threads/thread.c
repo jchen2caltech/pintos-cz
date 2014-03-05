@@ -96,7 +96,6 @@ void thread_init(void) {
     lock_init(&tid_lock);
     list_init(&ready_list);
     list_init(&all_list);
-    frame_table_init();
     supp_table_init();
     load_avg = 0;
 

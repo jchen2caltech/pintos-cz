@@ -13,6 +13,10 @@
 static struct frame_table f_table;
 
 struct frame_table_entry *evict_frame(void);
+unsigned frame_hash_func(struct hash_elem *h, void *aux UNUSED);
+bool frame_less_func(struct hash_elem *h1, struct hash_elem *h2, 
+                     void *aux UNUSED);
+
 
 void frame_table_init(int num_frames) {
     hash_init(&(&f_table)->table, frame_hash_func, frame_less_func, NULL);
@@ -41,13 +45,13 @@ struct frame_table_entry *obtain_frame(void *virtual_addr) {
     return newframe;
 }
 
-void frame_hash_func(struct hash_elem *h, void *aux UNUSED) {
+unsigned frame_hash_func(struct hash_elem *h, void *aux UNUSED) {
     struct frame_table_entry *fte = hash_entry(h, struct frame_table_entry, 
                                                elem);
     return hash_bytes(&fte->physical_addr, sizeof fte->physical_addr);
 }
 
-void frame_less_func(struct hash_elem *h1, struct hash_elem *h2, 
+bool frame_less_func(struct hash_elem *h1, struct hash_elem *h2, 
                      void *aux UNUSED) {
     struct frame_table_entry *f1 = hash_entry(h1, struct frame_table_entry,
                                               elem);

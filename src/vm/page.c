@@ -57,6 +57,21 @@ struct supp_table * create_supp_table(struct file *file, off_t ofs,
     return st;
 }
 
+struct supp_table * create_stack_supp_table(void){
+    struct supp_table* st;
+    st =(struct supp_table*) malloc(sizeof(struct supp_table));
+        
+    if (st == NULL) {
+        /*printf("Cannot allocate sup_table.\n");*/
+        exit(-1);
+    }
+    st->type = SPT_STACK;
+    st->writable = true;
+    st->fr = NULL;
+    hash_insert(&(thread_current()->s_table), &st->elem);
+    return st;
+}
+
 unsigned spte_hash_func(struct hash_elem *h, void *aux UNUSED) {
     struct supp_table * st = hash_entry(h, struct supp_table, elem);
     return hash_bytes(&st->upage, sizeof st->upage);

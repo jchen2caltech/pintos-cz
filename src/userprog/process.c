@@ -517,9 +517,12 @@ static bool setup_stack(void **esp) {
     return success;*/
     
     struct frame_table_entry *fr;
+    struct supp_table * st;
     bool success = false;
-    
-    fr = obtain_frame(PAL_USER | PAL_ZERO, NULL);
+    ASSERT(thread_current()->stack_no == 0);
+    st = create_stack_supp_table();
+    fr = obtain_frame(PAL_USER | PAL_ZERO, st);
+    st->fr = fr;
     thread_current()->stack_no = 1;
     success = install_page(((uint8_t *) PHYS_BASE) - PGSIZE, fr->physical_addr, true);
     if (success)

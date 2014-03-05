@@ -119,6 +119,7 @@ static void page_fault(struct intr_frame *f) {
     bool write;        /* True: access was write, false: access was read. */
     bool user;         /* True: access by user, false: access by kernel. */
     void *fault_addr;  /* Fault address. */
+    uint32_t stack_no;
     struct supp_table* st;
     struct frame_table_entry* fr;
 
@@ -148,9 +149,17 @@ static void page_fault(struct intr_frame *f) {
         st = find_supp_table(fault_addr);
         
         if (st == NULL) {
-            printf("Cannot find the supplemental page table...\n");
-            
-                exit(-1);
+            /*printf("Cannot find the supplemental page table...\n");*/
+            stack_no = thread_current()->stack_no;
+            if ((uint32_t)f->esp + 32 >= (uint32_t)fault_addr && 
+                (uint32_t)f->esp - 32 <= (uint32_t)fault_addr
+                 && fault_addr < PHYS_BASE - stack_no * PGSIZE){
+                st = create_stack_supp_table();
+                fr = obtain_frame(PAL_USER | PAL_ZERO, st);
+                st->fr = fr;
+                ++ thread_current()->stack_no;
+            }
+            else { exit(-1);}
  
         }
         fr = obtain_frame(PAL_USER, st);

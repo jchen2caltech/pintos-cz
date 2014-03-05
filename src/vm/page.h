@@ -7,6 +7,7 @@
 #define SPT_FILE 0
 #define SPT_SWAP 1
 #define SPT_NULL 2
+#define SPT_STACK 3
 
 struct supp_table {
    struct file* file;
@@ -27,4 +28,5 @@ struct supp_table * find_supp_table(void *virtual_addr);
 struct supp_table * create_supp_table(struct file *file, off_t ofs, 
                                       uint8_t *upage, uint32_t read_bytes,
                                       uint32_t zero_bytes, bool writable);
+struct supp_table * create_stack_supp_table(void);
 #endif 

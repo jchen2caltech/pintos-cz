@@ -5,6 +5,7 @@
 #include "vm/page.h"
 #include <list.h>
 #include "threads/synch.h"
+#include "threads/palloc.h"
 
 struct frame_table {
     struct list table;
@@ -21,7 +22,8 @@ struct frame_table_entry {
 
 void frame_table_init(int num_frames);
 
-struct frame_table_entry *obtain_frame(void *virtual_addr);
+struct frame_table_entry *obtain_frame(enum palloc_flags flag, 
+                                       struct supp_table *pte);
 
 
 #endif

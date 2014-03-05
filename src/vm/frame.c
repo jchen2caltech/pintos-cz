@@ -22,7 +22,8 @@ void frame_table_init(int num_frames) {
 }
 
 
-struct frame_table_entry *obtain_frame(void *virtual_addr) {
+struct frame_table_entry *obtain_frame(enum palloc_flags flag, 
+                                       struct supp_table *pte) {
     void *page;
     struct frame_table_entry *newframe;
     size_t idx;
@@ -31,14 +32,15 @@ struct frame_table_entry *obtain_frame(void *virtual_addr) {
     if (idx == BITMAP_ERROR)
         PANIC("Run out of frames\n");
     else {
-        page = palloc_get_page(PAL_USER);
+        page = palloc_get_page(flag);
         if (page) {
-            newframe = (struct frame_table_entry *)malloc(sizeof(struct frame_table_entry));
+            newframe = (struct frame_table_entry *)\
+                       malloc(sizeof(struct frame_table_entry));
             if (!newframe)
                 PANIC("malloc failure\n");
             newframe->physical_addr = page;
             newframe->owner = thread_current();
-            newframe->virtual_addr = virtual_addr;
+            newframe->spt = pte;
         }
         else {
             PANIC("Run out of frames\n");
@@ -48,10 +50,10 @@ struct frame_table_entry *obtain_frame(void *virtual_addr) {
     return newframe;
 }
 
-void * evict_frame(void *virtual_addr) {
+void * frame_evict(void *virtual_addr) {
 
     lock_acquire(&f_table.lock);
-    
-    
+
+
     lock_release(&f_table.lock);
 }

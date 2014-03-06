@@ -59,7 +59,7 @@ void * frame_evict(enum palloc_flags flag) {
         ce = list_pop_front(&f_table.table);
         cf = list_entry(ce, struct frame_table_entry, elem);
         ct = cf->owner;
-        if (!cf-spt->pinned) {
+        if (!cf->spt->pinned) {
             if (pagedir_is_accessed(ct->pagedir, cf->spt->upage))
                 pagedir_set_accessed(ct->pagedir, cf->spt->upage, false);
             else {

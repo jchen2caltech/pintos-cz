@@ -52,7 +52,7 @@ struct supp_table * create_supp_table(struct file *file, off_t ofs,
     st->writable = writable;
     st->swap_slot = NULL;
     st->fr = NULL;
-    st->pinned = true
+    st->pinned = false;
     hash_insert(&(thread_current()->s_table), &st->elem);
     
     return st;

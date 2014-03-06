@@ -173,27 +173,27 @@ static void page_fault(struct intr_frame *f) {
         st->pinned = true;
 
         if (st->type == SPT_SWAP) {
-            swap_in(st->upage, st->swap_index);
-            st->upage = SPT_NULL;
+            swap_in(fr->physical_addr, st->swap_index);
         }
         
-        if (st->zero_bytes != PGSIZE) {
-            file_seek(st->file, st->ofs);
-            if (file_read(st->file, fr->physical_addr, st->read_bytes) !=
-                (int) st->read_bytes) {
-                /*printf("File read bytes not as expected.\n");*/
-                exit(-1);
-            }   
-        }
+        else {
+            if (st->zero_bytes != PGSIZE) {
+                file_seek(st->file, st->ofs);
+                if (file_read(st->file, fr->physical_addr, st->read_bytes) !=
+                    (int) st->read_bytes) {
+                    /*printf("File read bytes not as expected.\n");*/
+                    exit(-1);
+                }   
+            }
             
-        memset(fr->physical_addr + st->read_bytes, 0, st->zero_bytes);
-        if (!install_page(st->upage, fr->physical_addr, st->writable)){
+            memset(fr->physical_addr + st->read_bytes, 0, st->zero_bytes);
+        }
+        if (!install_page(st->upage, fr->physical_addr, st->writable)) {
             /*printf("Cannot install the page. \n");*/
             exit(-1);
         }
         st->pinned = false;
             /*printf("Found the page!!\n");*/
-        
     } else {
 
         /* To implement virtual memory, delete the rest of the function

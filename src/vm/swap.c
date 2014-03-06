@@ -27,18 +27,18 @@ size_t swap_out(void *frame) {
     size_t position, i;
 
     if (!swap_block || !swap_bm)
-        PANIC("swapping partition not present! block %d bm %d\n", 
+        PANIC("swapping partition not present!\n", 
               (int)swap_block, (int) swap_bm);
     if (swap_lock.holder != thread_current())
         lock_acquire(&swap_lock);
 
-    position = bitmap_scan_and_flip(swap_bm, 0, 1, 0);
+    position = bitmap_scan_and_flip(swap_bm, 0, 1, false);
     if (position == BITMAP_ERROR)
         PANIC("no free swapping partition available!\n");
-
-    for (i = 0; i < SECTORS_PER_PAGE; i++)
+    for (i = 0; i < SECTORS_PER_PAGE; i++) {
         block_write(swap_block, position * SECTORS_PER_PAGE + i,
                     (uint8_t *)frame + i * BLOCK_SECTOR_SIZE);
+    }
     lock_release(&swap_lock);
     return position;
 }
@@ -51,10 +51,11 @@ void swap_in(void *frame, size_t position) {
     if (swap_lock.holder != thread_current())
         lock_acquire(&swap_lock);
     if (!bitmap_test(swap_bm, position))
-        PANIC("attempt to swap in a free frame!\n");
+        PANIC("attempt to swap in a free frame! %d\n", position);
     bitmap_flip(swap_bm, position);
-    for (i = 0; i < SECTORS_PER_PAGE; i++)
+    for (i = 0; i < SECTORS_PER_PAGE; i++) {
         block_read(swap_block, position * SECTORS_PER_PAGE + i,
                    (uint8_t *)frame + i * BLOCK_SECTOR_SIZE);
+    }
     lock_release(&swap_lock);
 }

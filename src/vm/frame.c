@@ -50,23 +50,28 @@ void * frame_evict(enum palloc_flags flag) {
     struct list_elem *ce;
     struct thread *ct;
     struct frame_table_entry *cf;
+    bool one_round = false;
     
     if (f_table.lock.holder != thread_current())
         lock_acquire(&f_table.lock);
+    if (list_empty(&f_table.table)) {
+        lock_release(&f_table.lock);
+        return NULL;
+    }
+    ce = list_begin(&f_table.table);
     while (true) {
-        if (list_empty(&f_table.table))
-            return NULL;
-        ce = list_pop_front(&f_table.table);
         cf = list_entry(ce, struct frame_table_entry, elem);
         ct = cf->owner;
         if (!cf->spt->pinned) {
             if (pagedir_is_accessed(ct->pagedir, cf->spt->upage))
                 pagedir_set_accessed(ct->pagedir, cf->spt->upage, false);
             else {
-                if (pagedir_is_dirty(ct->pagedir, cf->spt->upage)) {
+                if (pagedir_is_dirty(ct->pagedir, cf->spt->upage) ||
+                    cf->spt->type == SPT_SWAP) {
                     cf->spt->type = SPT_SWAP;
                     cf->spt->swap_index = swap_out(cf->physical_addr);
                 }
+                list_remove(ce);
                 pagedir_clear_page(ct->pagedir, cf->spt->upage);
                 palloc_free_page(cf->physical_addr);
                 free(cf);
@@ -74,6 +79,15 @@ void * frame_evict(enum palloc_flags flag) {
                 return palloc_get_page(flag);
             }
         }
-        list_push_back(&f_table.table, ce);
+        ce = list_next(ce);
+        if (ce == list_end(&f_table.table)) {
+            if (!one_round) {
+                ce = list_begin(&f_table.table);
+                /*one_round = true;*/
+            } else {
+                lock_release(&f_table.lock);
+                return NULL;
+            }
+        }
     }
 }

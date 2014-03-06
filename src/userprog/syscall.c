@@ -37,6 +37,7 @@ static void syscall_handler(struct intr_frame *f) {
     const char *cmdline, *f_name;
     unsigned f_size, position, size;
     uint32_t fd;
+    mapid_t mapping;
     
     /* Retrieve syscall number */
     uint32_t sys_no = read4(f, 0);
@@ -120,12 +121,12 @@ static void syscall_handler(struct intr_frame *f) {
         case SYS_MMAP:
             fd = (uint32_t) read4(f, 4);
             buffer = (void*) read4(f, 8);
-         /*   f->eax = (uint32_t) mmap(fd, buffer);*/
+            f->eax = (uint32_t) mmap(fd, buffer);
             break;
 
         case SYS_MUNMAP:
-          /*  mapping = (mapid_t) read4(f, 4);*/
-         /*   munmap(mapping);*/
+            mapping = (mapid_t) read4(f, 4);
+            munmap(mapping);
             break;
 
         default:
@@ -392,18 +393,20 @@ struct f_info* findfile(uint32_t fd) {
     
 }
 
-mapid_t mmap(int fd, void* addr){
+mapid_t mmap(uint32_t fd, void* addr){
     int f_size;
     void* addr_e;
     mapid_t mapid;
     uint32_t read_bytes, zero_bytes;
-    void* *upage;
+    uint8_t *upage;
     off_t ofs;
     struct file* file;
     struct f_info* f;
     struct mmap_elem* me;
     struct supp_table* st;
     struct thread* t = thread_current();
+    
+    /*printf("Start mapping...\n");*/
     
     if (fd == STDIN_FILENO ||
         fd == STDOUT_FILENO ||
@@ -414,10 +417,13 @@ mapid_t mmap(int fd, void* addr){
             return MAP_FAIL;
     }
     
-    f_size = file_size(fd);
-    for (addr_e = addr; addr < addr + f_size; addr += PGSIZE){
-            if (find_supp_table(addr_e) != NULL)
+    /*printf("where does it stuck?!");*/
+    f_size = filesize(fd);
+    for (addr_e = addr; addr_e < addr + f_size; addr_e += PGSIZE){
+            if (find_supp_table(addr_e) != NULL){
+                /*printf("Hello\n");*/
                 return MAP_FAIL;
+            }   
     }
     
     ++ t->mmapid_max;
@@ -428,9 +434,9 @@ mapid_t mmap(int fd, void* addr){
     
     f = findfile(fd);
     
-    lock_acquire(&filesys_lock);
+    /*lock_acquire(&filesys_lock);*/
     file = file_reopen(f->f);
-    lock_release(&filesys_lock);
+    /*lock_release(&filesys_lock);*/
     
     if (file == NULL){
         free(me);
@@ -438,7 +444,9 @@ mapid_t mmap(int fd, void* addr){
     }
     
     me->file = file;
+    me->mapid = mapid;
     list_push_back(&(t->mmap_lst), &(me->elem));
+    list_init(&(me->s_table));
     upage = addr;
     ofs = 0;
     read_bytes = f_size;
@@ -448,14 +456,14 @@ mapid_t mmap(int fd, void* addr){
     else
         zero_bytes = PGSIZE - read_bytes;
     
-    
-    while (read_bytes > 0 || zero_bytes > 0) {
+    /*printf("Starting giving pages...\n");*/
+    while (read_bytes > 0) {
         /* Calculate how to fill this page.
            We will read PAGE_READ_BYTES bytes from FILE
            and zero the final PAGE_ZERO_BYTES bytes. */
         size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
         size_t page_zero_bytes = PGSIZE - page_read_bytes;
-        
+        /*printf("Here? offset: %d at upage %x\n", ofs, upage);*/
         st = create_mmap_supp_table(file, ofs, upage, page_read_bytes, 
                                     page_zero_bytes, true);
 
@@ -465,6 +473,7 @@ mapid_t mmap(int fd, void* addr){
         upage += PGSIZE;
         ofs += page_read_bytes;
     }
+    /*printf("Mapping done!!\n");*/
     return mapid;
 }
 
@@ -498,6 +507,7 @@ void munmap(mapid_t mapping){
         ofs += page_write_size;
         write_bytes -= page_write_size;
     }
+    file_close(me->file);
     list_remove(&(me->elem));
     
 }
@@ -508,7 +518,7 @@ struct mmap_elem* find_mmap_elem(mapid_t mapid){
     struct list* m_lst = &(t->mmap_lst);
     struct mmap_elem* me;
     
-    if (mapid == MAP_FAIL && mapid > t->mapid_max) {
+    if (mapid == MAP_FAIL && mapid > t->mmapid_max) {
         printf("Mapid is out of range.\n");
         exit(-1);
     }

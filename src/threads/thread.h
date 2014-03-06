@@ -27,6 +27,9 @@ typedef int tid_t;
 typedef int pid_t;
 #define TID_ERROR ((tid_t) -1)          /*!< Error value for tid_t. */
 
+typedef int mapid_t;
+#define MAP_FAIL ((mapid_t) -1)
+
 /* Thread priorities. */
 #define PRI_MIN 0                       /*!< Lowest priority. */
 #define PRI_DEFAULT 31                  /*!< Default priority. */

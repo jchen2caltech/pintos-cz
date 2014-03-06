@@ -32,5 +32,7 @@ struct supp_table * create_supp_table(struct file *file, off_t ofs,
                                       uint8_t *upage, uint32_t read_bytes,
                                       uint32_t zero_bytes, bool writable);
 struct supp_table * create_stack_supp_table(void *virtual_addr);
-struct supp_table * create_mmap_supp_table(void *virtual_addr);
+struct supp_table * create_mmap_supp_table(struct file *file, off_t ofs, 
+                                      void *upage, uint32_t read_bytes,
+                                      uint32_t zero_bytes, bool writable);
 #endif 

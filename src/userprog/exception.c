@@ -144,8 +144,12 @@ static void page_fault(struct intr_frame *f) {
     write = (f->error_code & PF_W) != 0;
     user = (f->error_code & PF_U) != 0;
     
-    if (fault_addr < USER_ADDR_BOT)
+    /*printf("page faulting at %x\n", pg_round_down(fault_addr));*/
+    
+    if (fault_addr < USER_ADDR_BOT){
+        /*printf("exiting here.....\n");*/
         exit(-1);
+    }
 
     if (not_present && is_user_vaddr(fault_addr)) {
         /*printf("Fault thread at %s\n", thread_current()->name); */

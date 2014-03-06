@@ -39,6 +39,7 @@ static void syscall_handler(struct intr_frame *f) {
     uint32_t fd;
     mapid_t mapping;
     struct supp_table *st;
+    struct thread* t = thread_current();
 
     /* Retrieve syscall number */
     uint32_t sys_no = read4(f, 0);
@@ -46,16 +47,22 @@ static void syscall_handler(struct intr_frame *f) {
     void *buffer; 
     pid_t pid;
     
-
-    
+    t->syscall = true;
+    t->esp = f->esp;
+    /*printf("doing syscall %d and saving esp: %x\n", sys_no, t->esp);*/
     switch (sys_no) {
         case SYS_HALT:
             halt();
+            t->syscall = false;
+            t->esp = NULL;
             break;
             
         case SYS_EXIT:
+            
             status = (int) read4(f, 4);
             exit(status);
+            t->syscall = false;
+            t->esp = NULL;
             break;
             
         case SYS_EXEC:
@@ -66,17 +73,26 @@ static void syscall_handler(struct intr_frame *f) {
         case SYS_WAIT:
             pid = (pid_t) read4(f, 4);
             f->eax = (uint32_t) wait(pid);
+            t->syscall = false;
+            t->esp = NULL;
             break;
             
         case SYS_CREATE:
+            
             f_name = (const char*) read4(f, 4);
+
             f_size = (unsigned) read4(f, 8);
+
             f->eax = (uint32_t) create(f_name, f_size);
+            t->syscall = false;
+            t->esp = NULL;
             break;
             
         case SYS_REMOVE:
             f_name = (const char*) read4(f, 4);
             f->eax = (uint32_t) remove(f_name);
+            t->syscall = false;
+            t->esp = NULL;
             break;
             
         case SYS_OPEN:
@@ -87,30 +103,42 @@ static void syscall_handler(struct intr_frame *f) {
         case SYS_FILESIZE:
             fd = (uint32_t) read4(f, 4);
             f->eax = (uint32_t) filesize(fd);
+            t->syscall = false;
+            t->esp = NULL;
             break;
             
         case SYS_READ:
+            
+            
             fd = (uint32_t) read4(f, 4);
+            
             buffer = (void*) read4(f, 8);
+            /*
             if ((uint32_t)f->esp - 32 <= (uint32_t)buffer && 
-                (uint32_t)buffer >= PHYS_BASE - THREAD_MAX_STACK * PGSIZE &&
+                is_user_vaddr(buffer) &&
+                (uint32_t)buffer >= PHYS_BASE - 16 * PGSIZE &&
                 !pagedir_get_page(thread_current()->pagedir, buffer)) {
+                printf("creating stack growth");
                 st = create_stack_supp_table(pg_round_down(buffer));
                 st->fr = obtain_frame(PAL_USER | PAL_ZERO, st);
                 ++ thread_current()->stack_no;
                 if (!install_page(st->upage, st->fr->physical_addr, 
                     st->writable))
                     exit(-1);
-            }
+            }*/
             size = (unsigned) read4(f, 12);
             f->eax = (uint32_t) read(fd, buffer, size);
+            t->syscall = false;
+            t->esp = NULL;
             break;
             
         case SYS_WRITE:
+
             fd = (uint32_t) read4(f, 4);
             buffer = (void*) read4(f, 8);
-            if ((uint32_t)f->esp - 32 <= (uint32_t)buffer && 
-                (uint32_t)buffer >= PHYS_BASE - THREAD_MAX_STACK * PGSIZE &&
+            /*if ((uint32_t)f->esp - 32 <= (uint32_t)buffer && 
+                is_user_vaddr(buffer) &&
+                (uint32_t)buffer >= PHYS_BASE - 16 * PGSIZE &&
                 !pagedir_get_page(thread_current()->pagedir, buffer)) {
                 st = create_stack_supp_table(pg_round_down(buffer));
                 st->fr = obtain_frame(PAL_USER | PAL_ZERO, st);
@@ -118,40 +146,54 @@ static void syscall_handler(struct intr_frame *f) {
                 if (!install_page(st->upage, st->fr->physical_addr, 
                     st->writable))
                     exit(-1);
-            }
+            }*/
             size = (unsigned) read4(f, 12);
             f->eax = (uint32_t) write(fd, buffer, size);
+            t->syscall = false;
+            t->esp = NULL;
             break;
             
         case SYS_SEEK:
             fd = (uint32_t) read4(f, 4);
             position = (unsigned) read4(f, 8);
             seek(fd, position);
+            t->syscall = false;
+            t->esp = NULL;
             break;
             
         case SYS_TELL:
             fd = (uint32_t) read4(f, 4);
             f->eax = (uint32_t) tell(fd);
+            t->syscall = false;
+            t->esp = NULL;
             break;
             
         case SYS_CLOSE:
             fd = (uint32_t) read4(f, 4);
             close(fd);
+            t->syscall = false;
+            t->esp = NULL;
             break;
 
         case SYS_MMAP:
             fd = (uint32_t) read4(f, 4);
             buffer = (void*) read4(f, 8);
             f->eax = (uint32_t) mmap(fd, buffer);
+            t->syscall = false;
+            t->esp = NULL;
             break;
 
         case SYS_MUNMAP:
             mapping = (mapid_t) read4(f, 4);
             munmap(mapping);
+            t->syscall = false;
+            t->esp = NULL;
             break;
 
         default:
             exit(-1);
+            t->syscall = false;
+            t->esp = NULL;
             break;
     }
     
@@ -491,7 +533,8 @@ mapid_t mmap(uint32_t fd, void* addr){
         list_push_back(&(me->s_table), &(st->map_elem));
         read_bytes -= page_read_bytes;
         zero_bytes -= page_zero_bytes;
-        /*printf("Allocating page %x, with read_bytes %d\n", upage, page_read_bytes);*/
+        /*printf("Allocating page %x, with read_bytes %d\n", upage, page_read_bytes);
+        */
         upage += PGSIZE;
         ofs += page_read_bytes;
         
@@ -514,8 +557,8 @@ void munmap(mapid_t mapping){
     f_size = file_length(me->file);
     write_bytes = f_size;
     /*printf("1\n\n\n");*/
-    for (e = list_begin(&(me->s_table)); e != list_end(&(me->s_table));
-         e = list_next(e)) {
+    while (!list_empty(&me->s_table)) {
+        e = list_pop_front(&me->s_table);
         st = list_entry(e, struct supp_table, map_elem);
         /*printf("Unmapping upage %x\n", st->upage);
         printf("2\n\n\n");*/
@@ -540,12 +583,16 @@ void munmap(mapid_t mapping){
             ofs += page_write_size;
             write_bytes -= page_write_size;
         }
+        /*printf("hello\n");*/
         spte_destructor_func(&(st->elem), NULL);
     }
-    
+    /*printf("helloagain\n");*/
     file_close(me->file);
+    /*printf("1\n");*/
     list_remove(&(me->elem));
+    /*printf("2\n");*/
     free(me);
+    /*printf("3\n");*/
 }
 
 struct mmap_elem* find_mmap_elem(mapid_t mapid){

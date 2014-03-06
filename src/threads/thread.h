@@ -142,6 +142,8 @@ struct thread {
     uint32_t stack_no;                  /*! total number of stack of PGSIZE allocated */
     struct list mmap_lst;               /*! The list for mmap structs */
     mapid_t mmapid_max;
+    bool syscall;
+    void * esp;
     /**@{*/
     struct list child_returnstats;      /*!< List of child process return-stats */
     struct thread_return_status *trs;   /*!< Return-stats of this thread */

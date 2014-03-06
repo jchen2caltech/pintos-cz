@@ -220,6 +220,8 @@ tid_t thread_create2(const char *name, int priority, thread_func *function,
     list_init(&(t->mmap_lst));
     t->stack_no = 0;
     t->mmapid_max = 0;
+    t->esp = NULL;
+    t->syscall = false;
 #endif
     /* Stack frame for kernel_thread(). */
     kf = alloc_frame(t, sizeof *kf);

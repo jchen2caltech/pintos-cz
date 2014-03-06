@@ -51,14 +51,18 @@ tid_t process_execute(const char *file_name) {
     /* Create a new thread to execute FILE_NAME. */
     tid = thread_create2(prog_name, PRI_DEFAULT, start_process, fn_copy, 
                          THREAD_PROCESS);
+    /*printf("creating child thread %d\n", tid);
+    */
     trs = thread_findchild(tid);
     if (tid == TID_ERROR)
         palloc_free_page(fn_copy); 
     else 
         sema_down(&trs->sem);
 
-    if (tid != TID_ERROR && trs->stat == -1)
-        tid = TID_ERROR;
+    /*if (tid != TID_ERROR && trs->stat == -1)
+        tid = TID_ERROR;*/
+   /* printf("here child thread %d\n", tid);
+    */
     return tid;
 }
 
@@ -177,17 +181,19 @@ void process_exit(void) {
         ce = list_begin(&(cur->mmap_lst));
         cm = list_entry(ce, struct mmap_elem, elem);
         munmap(cm->mapid);
-        
+        /*printf("done unmap\n");*/
     }
-    
+    /*printf("hash_destroy\n");*/
     hash_destroy(&cur->s_table, spte_destructor_func);
     /* Close and allow write on executable file if any is opened */
+    /*printf("if fexe\n");*/
     if (cur->f_exe){
         file_allow_write(cur->f_exe);
         file_close(cur->f_exe);
         cur->f_exe = NULL;
     }
     pd = cur->pagedir;
+    /*printf("pd null\n");*/
     if (pd != NULL) {
         /* Correct ordering here is crucial.  We must set
            cur->pagedir to NULL before switching page directories,
@@ -307,12 +313,13 @@ bool load(const char *cmdline, void (**eip) (void), void **esp) {
     process_activate();
     
     get_prog_name(cmdline, prog_name);
-
+    /*printf("Loading the program %s\n", prog_name);
+    */
     /* Open executable file. */
     file = filesys_open(prog_name);
     
     if (file == NULL) {
-        printf("load: %s: open failed\n", prog_name);
+        /*printf("load: %s: open failed\n", prog_name);*/
         goto done; 
     }
     t->f_exe = file;
@@ -400,6 +407,7 @@ bool load(const char *cmdline, void (**eip) (void), void **esp) {
     
 
     success = true;
+    /*printf("done loading!! success!!\n");*/
 
 done:
     /* We arrive here whether the load is successful or not. */

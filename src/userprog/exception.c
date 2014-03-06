@@ -124,6 +124,8 @@ static void page_fault(struct intr_frame *f) {
     uint32_t stack_no;
     struct supp_table* st;
     struct frame_table_entry* fr;
+    void* esp;
+    struct thread* t = thread_current();
 
     /* Obtain faulting address, the virtual address that was accessed to cause
        the fault.  It may point to code or to data.  It is not necessarily the
@@ -144,41 +146,55 @@ static void page_fault(struct intr_frame *f) {
     write = (f->error_code & PF_W) != 0;
     user = (f->error_code & PF_U) != 0;
     
-    /*printf("page faulting at %x\n", pg_round_down(fault_addr));*/
+    if (t->syscall && t->esp)
+        esp = t->esp;
+    else
+        esp = f->esp;
+    
+    /*printf("page faulting at %x esp %x thread %s\n", pg_round_down(fault_addr), (int)f->esp,thread_current()->name);*/
+    
     
     if (fault_addr < USER_ADDR_BOT){
-        /*printf("exiting here.....\n");*/
+        /*printf("exiting here, address not in the right range.....\n");*/
         exit(-1);
     }
-
+    /*printf("ex-1\n\n");*/
     if (not_present && is_user_vaddr(fault_addr)) {
-        /*printf("Fault thread at %s\n", thread_current()->name); */
-        
+
+        /*printf("finding the supp table\n");*/
         st = find_supp_table(pg_round_down(fault_addr));
-        
+        /*printf("find function returned\n");*/
+        /*printf("ex0.6 %x\n\n", st);*/
         if (!st) {
             /*printf("Cannot find the supplemental page table...\n");*/
             stack_no = thread_current()->stack_no;
-            if ((uint32_t)f->esp - 32 <= (uint32_t)fault_addr &&
+            /*printf("ex1\n\n");*/
+            if ((uint32_t)esp - 32 <= (uint32_t)fault_addr &&
                 (uint32_t)fault_addr >= PHYS_BASE - THREAD_MAX_STACK \
                                                     * PGSIZE) {
                 if (thread_current()->stack_no < THREAD_MAX_STACK) {
+                    /*printf("ex2\n\n");*/
                     st = create_stack_supp_table(pg_round_down(fault_addr));
                     fr = obtain_frame(PAL_USER | PAL_ZERO, st);
                     st->fr = fr;
                     ++ thread_current()->stack_no;
                     if (!install_page(st->upage, fr->physical_addr, 
-                        st->writable))
+                        st->writable)) {
+                        /*printf("Cannot install stack page\n");*/
                         exit(-1);
+                    }
+                    /*printf("Stack page installed.\n");*/
                     return;
                 }
+                /*printf("too many  stack page\n");*/
                 exit(-1);
             }
             else { 
+                /*printf("not a stack page\n");*/
               exit(-1);
             }
         }
-        
+        /*printf("ex3\n\n");*/
         fr = obtain_frame(PAL_USER, st);
         fr->spt = st;
         st->fr = fr;
@@ -204,8 +220,8 @@ static void page_fault(struct intr_frame *f) {
             /*printf("Cannot install the page. \n");*/
             exit(-1);
         }
+        /*printf("Page installed\n");*/
         st->pinned = false;
-            /*printf("Found the page!!\n");*/
     } else {
 
         /* To implement virtual memory, delete the rest of the function

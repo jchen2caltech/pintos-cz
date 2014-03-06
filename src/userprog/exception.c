@@ -155,8 +155,7 @@ static void page_fault(struct intr_frame *f) {
         if (!st) {
             /*printf("Cannot find the supplemental page table...\n");*/
             stack_no = thread_current()->stack_no;
-            if ((uint32_t)f->esp + 32 >= (uint32_t)fault_addr && 
-                (uint32_t)f->esp - 32 <= (uint32_t)fault_addr &&
+            if ((uint32_t)f->esp - 32 <= (uint32_t)fault_addr &&
                 (uint32_t)fault_addr >= PHYS_BASE - THREAD_MAX_STACK \
                                                     * PGSIZE) {
                 if (thread_current()->stack_no < THREAD_MAX_STACK) {

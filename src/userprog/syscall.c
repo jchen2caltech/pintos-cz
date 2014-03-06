@@ -12,6 +12,8 @@
 #include "devices/input.h"
 #include "devices/shutdown.h"
 #include "userprog/pagedir.h"
+#include "vm/page.h"
+#include "vm/frame.h"
 
 
 static void syscall_handler(struct intr_frame *);
@@ -387,5 +389,137 @@ struct f_info* findfile(uint32_t fd) {
     /* If not found, then exit with error. */
     exit(-1);
     return NULL;
+    
+}
+
+mapid_t mmap(int fd, void* addr){
+    int f_size;
+    void* addr_e;
+    mapid_t mapid;
+    uint32_t read_bytes, zero_bytes;
+    void* *upage;
+    off_t ofs;
+    struct file* file;
+    struct f_info* f;
+    struct mmap_elem* me;
+    struct supp_table* st;
+    struct thread* t = thread_current();
+    
+    if (fd == STDIN_FILENO ||
+        fd == STDOUT_FILENO ||
+        filesize(fd) == 0 ||
+        (!checkva(addr)) ||
+        pg_ofs(addr) != 0 ||
+        addr == 0) {
+            return MAP_FAIL;
+    }
+    
+    f_size = file_size(fd);
+    for (addr_e = addr; addr < addr + f_size; addr += PGSIZE){
+            if (find_supp_table(addr_e) != NULL)
+                return MAP_FAIL;
+    }
+    
+    ++ t->mmapid_max;
+    mapid = t->mmapid_max;
+    me = (struct mmap_elem*) malloc(sizeof(struct mmap_elem));
+    if (me == NULL)
+        return MAP_FAIL;
+    
+    f = findfile(fd);
+    
+    lock_acquire(&filesys_lock);
+    file = file_reopen(f->f);
+    lock_release(&filesys_lock);
+    
+    if (file == NULL){
+        free(me);
+        return MAP_FAIL;
+    }
+    
+    me->file = file;
+    list_push_back(&(t->mmap_lst), &(me->elem));
+    upage = addr;
+    ofs = 0;
+    read_bytes = f_size;
+    
+    if (read_bytes >= PGSIZE)
+        zero_bytes = 0;
+    else
+        zero_bytes = PGSIZE - read_bytes;
+    
+    
+    while (read_bytes > 0 || zero_bytes > 0) {
+        /* Calculate how to fill this page.
+           We will read PAGE_READ_BYTES bytes from FILE
+           and zero the final PAGE_ZERO_BYTES bytes. */
+        size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+        size_t page_zero_bytes = PGSIZE - page_read_bytes;
+        
+        st = create_mmap_supp_table(file, ofs, upage, page_read_bytes, 
+                                    page_zero_bytes, true);
+
+        list_push_back(&(me->s_table), &(st->map_elem));
+        read_bytes -= page_read_bytes;
+        zero_bytes -= page_zero_bytes;
+        upage += PGSIZE;
+        ofs += page_read_bytes;
+    }
+    return mapid;
+}
+
+
+void munmap(mapid_t mapping){
+    uint32_t f_size, write_bytes, page_write_size, pws2;
+    off_t ofs = 0;
+    struct list_elem *e;
+    struct supp_table* st;
+    struct mmap_elem *me = find_mmap_elem(mapping);
+    struct thread* t = thread_current();
+    
+    f_size = file_length(me->file);
+    write_bytes = f_size;
+    for (e = list_begin(&(me->s_table)); e < list_end(&(me->s_table));
+         e = list_next(e))
+    {
+        st = list_entry(e, struct supp_table, map_elem);
+        
+        if (write_bytes >= PGSIZE)
+            page_write_size = PGSIZE;
+        else
+            page_write_size = write_bytes;
+        
+        if (pagedir_is_dirty(t->pagedir, st->upage)){
+            pws2 = file_write_at(me->file, st->upage, 
+                                            page_write_size, ofs);
+            
+            ASSERT(pws2 == page_write_size);
+        }
+        ofs += page_write_size;
+        write_bytes -= page_write_size;
+    }
+    list_remove(&(me->elem));
+    
+}
+
+struct mmap_elem* find_mmap_elem(mapid_t mapid){
+    struct list_elem *e;
+    struct thread* t = thread_current();
+    struct list* m_lst = &(t->mmap_lst);
+    struct mmap_elem* me;
+    
+    if (mapid == MAP_FAIL && mapid > t->mapid_max) {
+        printf("Mapid is out of range.\n");
+        exit(-1);
+    }
+    
+    for (e = list_begin(m_lst); e != list_end(m_lst); e = list_next(e)){
+        me = list_entry(e, struct mmap_elem, elem);
+        if (mapid == me->mapid)
+            return me;
+    }
+    
+    printf("Mapid is not found.\n");
+    exit(-1);
     
 }

@@ -77,6 +77,34 @@ struct supp_table * create_stack_supp_table(void* virtual_addr){
     return st;
 }
 
+struct supp_table * create_mmap_supp_table(void *virtual_addr){
+    ASSERT(read_bytes + zero_bytes == PGSIZE);
+    /*printf("Creating supp_page %x in thread: %s\n", upage, thread_current()->name);*/
+    struct supp_table* st;
+    st =(struct supp_table*) malloc(sizeof(struct supp_table));
+        
+    if (st == NULL) {
+        /*printf("Cannot allocate sup_table.\n");*/
+        exit(-1);
+    }
+        
+    st->type = SPT_MMAP;
+    st->swap_index = 0;
+    st->file = file;
+    st->ofs = ofs;
+    st->upage = upage;
+    st->read_bytes = read_bytes;
+    st->zero_bytes = zero_bytes;
+    st->writable = writable;
+    st->swap_slot = NULL;
+    st->fr = NULL;
+    st->pinned = false;
+    hash_insert(&(thread_current()->s_table), &st->elem);
+    
+    return st;
+    
+}
+
 unsigned spte_hash_func(struct hash_elem *h, void *aux UNUSED) {
     struct supp_table * st = hash_entry(h, struct supp_table, elem);
     return hash_bytes(&st->upage, sizeof st->upage);

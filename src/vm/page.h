@@ -8,6 +8,7 @@
 #define SPT_SWAP 1
 #define SPT_NULL 2
 #define SPT_STACK 3
+#define SPT_MMAP 4
 
 struct supp_table {
    struct file* file;
@@ -22,6 +23,7 @@ struct supp_table {
    struct swap_table* swap_slot;
    struct frame_table_entry* fr;
    struct hash_elem elem; 
+   struct list_elem map_elem;
 };
 
 void supp_table_init(struct hash* s_table);
@@ -30,4 +32,5 @@ struct supp_table * create_supp_table(struct file *file, off_t ofs,
                                       uint8_t *upage, uint32_t read_bytes,
                                       uint32_t zero_bytes, bool writable);
 struct supp_table * create_stack_supp_table(void *virtual_addr);
+struct supp_table * create_mmap_supp_table(void *virtual_addr);
 #endif 

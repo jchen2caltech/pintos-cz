@@ -13,6 +13,16 @@
 #include "devices/input.h"
 #include "userprog/pagedir.h"
 
+typedef int mapid_t;
+#define MAP_FAIL ((mapid_t) -1)
+
+struct mmap_elem {
+    mapid_t mapid;
+    struct list s_table;
+    struct file* file;
+    struct list_elem elem;
+};
+
 void syscall_init(void);
 void halt(void);
 void exit(int status);
@@ -27,6 +37,10 @@ int write(uint32_t fd, const void *buffer, unsigned size);
 void seek(uint32_t fd, unsigned position);
 unsigned tell(uint32_t fd);
 void close(uint32_t fd);
+mapid_t mmap(uint32_t fd, void* addr);
+void munmap(mapid_t mapping);
+
+struct mmap_elem* find_mmap_elem(mapid_t mapid);
 
 
 #endif /* userprog/syscall.h */

@@ -489,23 +489,23 @@ void munmap(mapid_t mapping){
     f_size = file_length(me->file);
     write_bytes = f_size;
     for (e = list_begin(&(me->s_table)); e < list_end(&(me->s_table));
-         e = list_next(e))
-    {
+         e = list_next(e)) {
         st = list_entry(e, struct supp_table, map_elem);
-        
-        if (write_bytes >= PGSIZE)
-            page_write_size = PGSIZE;
-        else
-            page_write_size = write_bytes;
-        
-        if (pagedir_is_dirty(t->pagedir, st->upage)){
-            pws2 = file_write_at(me->file, st->upage, 
-                                            page_write_size, ofs);
+        if (st->fr) {
+            if (write_bytes >= PGSIZE)
+                page_write_size = PGSIZE;
+            else
+                page_write_size = write_bytes;
             
-            ASSERT(pws2 == page_write_size);
+            if (pagedir_is_dirty(t->pagedir, st->upage)){
+                pws2 = file_write_at(me->file, st->upage, 
+                                                page_write_size, ofs);
+                
+                ASSERT(pws2 == page_write_size);
+            }
+            ofs += page_write_size;
+            write_bytes -= page_write_size;
         }
-        ofs += page_write_size;
-        write_bytes -= page_write_size;
     }
     file_close(me->file);
     list_remove(&(me->elem));

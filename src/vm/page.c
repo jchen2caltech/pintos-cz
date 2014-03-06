@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <list.h>
 #include <string.h>
+#include <bitmap.h>
 
 unsigned spte_hash_func(struct hash_elem *h, void *aux UNUSED);
 bool spte_less_func(struct hash_elem *h1, struct hash_elem *h2, 
@@ -116,4 +117,23 @@ bool spte_less_func(struct hash_elem *h1, struct hash_elem *h2,
     struct supp_table *s1 = hash_entry(h1, struct supp_table, elem);
     struct supp_table *s2 = hash_entry(h2, struct supp_table, elem);
     return (s1->upage < s2->upage);
+}
+
+void spte_destructor_func(struct hash_elem *h, void *aux UNUSED) {
+    struct supp_table *s = hash_entry(h, struct supp_table, elem);
+
+    if (s->fr) {
+        lock_acquire(&f_table.lock);
+        list_remove(&s->fr->elem);
+        pagedir_clear_page(s->fr->owner->pagedir, s->upage);
+        palloc_free_page(s->fr->physical_addr);
+        free(s->fr);
+        lock_release(&f_table.lock);
+    }
+    else if (s->type == SPT_SWAP) {
+        lock_acquire(&swap_lock);
+        bitmap_set(swap_bm, s->swap_index, 0);
+        lock_release(&swap_lock);
+    }
+    free(s);
 }

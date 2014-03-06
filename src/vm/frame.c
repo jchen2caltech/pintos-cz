@@ -11,7 +11,6 @@
 #include <list.h>
 #include <string.h>
 
-static struct frame_table f_table;
 
 void * frame_evict(enum palloc_flags flag);
 
@@ -80,6 +79,7 @@ void * frame_evict(enum palloc_flags flag) {
                 list_remove(ce);
                 pagedir_clear_page(ct->pagedir, cf->spt->upage);
                 palloc_free_page(cf->physical_addr);
+                cf->spt->fr = NULL;
                 free(cf);
                 lock_release(&f_table.lock);
                 return palloc_get_page(flag);

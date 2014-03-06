@@ -24,5 +24,5 @@ void frame_table_init(void);
 struct frame_table_entry *obtain_frame(enum palloc_flags flag, 
                                        struct supp_table *pte);
 
-
+struct frame_table f_table;
 #endif

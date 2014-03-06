@@ -135,6 +135,8 @@ void process_exit(void) {
     struct thread *ct;
     uint32_t *pd;
     enum intr_level old_level;
+    struct list_elem *ce;
+    struct mmap_elem *cm;
 
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
@@ -169,7 +171,13 @@ void process_exit(void) {
                         struct thread_return_status, elem);
         free(trs);
     }
-    intr_set_level(old_level);
+    while (!list_empty(&cur->mmap_lst)) {
+        ce = list_pop_front(mmap_lst);
+        cm = list_entry(ce, struct mmap_elem, elem);
+        munmap(cm->mapid);
+        free(cm);
+    }
+    hash_destroy(&cur->s_table, spte_destructor_func);
     
     /* Close and allow write on executable file if any is opened */
     if (cur->f_exe){

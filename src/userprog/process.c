@@ -171,11 +171,12 @@ void process_exit(void) {
                         struct thread_return_status, elem);
         free(trs);
     }
+    intr_set_level(old_level);
     while (!list_empty(&cur->mmap_lst)) {
-        ce = list_pop_front(&cur->mmap_lst);
+        ce = list_begin(&(cur->mmap_lst));
         cm = list_entry(ce, struct mmap_elem, elem);
         munmap(cm->mapid);
-        free(cm);
+        
     }
     hash_destroy(&cur->s_table, spte_destructor_func);
     

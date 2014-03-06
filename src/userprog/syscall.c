@@ -494,7 +494,7 @@ mapid_t mmap(uint32_t fd, void* addr){
         upage += PGSIZE;
         ofs += page_read_bytes;
     }
-    /*printf("Mapping done!!\n");*/
+    /*printf("Mapping done!! %d\n", mapid);*/
     return mapid;
 }
 
@@ -507,30 +507,43 @@ void munmap(mapid_t mapping){
     struct mmap_elem *me = find_mmap_elem(mapping);
     struct thread* t = thread_current();
     
+    printf("Unmapping %d\n", mapping);
+    
     f_size = file_length(me->file);
     write_bytes = f_size;
+    printf("1\n\n\n");
     for (e = list_begin(&(me->s_table)); e < list_end(&(me->s_table));
          e = list_next(e)) {
         st = list_entry(e, struct supp_table, map_elem);
+        printf("2\n\n\n");
         if (st->fr) {
+            printf("3\n\n\n");
             if (write_bytes >= PGSIZE)
                 page_write_size = PGSIZE;
             else
                 page_write_size = write_bytes;
-            
+            printf("4\n\n\n");
             if (pagedir_is_dirty(t->pagedir, st->upage)){
+                printf("5\n\n\n");
+                lock_acquire(&filesys_lock);
+                printf("7\n\n\n");
+                printf("file %x, upage %x, %d, %d", me->file, st->upage, page_write_size, ofs);
                 pws2 = file_write_at(me->file, st->upage, 
                                                 page_write_size, ofs);
-                
+                printf("8\n\n");
+                lock_release(&filesys_lock);
+                printf("6\n\n\n");
                 ASSERT(pws2 == page_write_size);
             }
             ofs += page_write_size;
             write_bytes -= page_write_size;
         }
+        spte_destructor_func(&(st->elem), NULL);
     }
+    
     file_close(me->file);
     list_remove(&(me->elem));
-    
+    free(me);
 }
 
 struct mmap_elem* find_mmap_elem(mapid_t mapid){

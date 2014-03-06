@@ -171,6 +171,7 @@ void process_exit(void) {
                         struct thread_return_status, elem);
         free(trs);
     }
+    
     intr_set_level(old_level);
     while (!list_empty(&cur->mmap_lst)) {
         ce = list_begin(&(cur->mmap_lst));
@@ -178,8 +179,8 @@ void process_exit(void) {
         munmap(cm->mapid);
         
     }
-    hash_destroy(&cur->s_table, spte_destructor_func);
     
+    hash_destroy(&cur->s_table, spte_destructor_func);
     /* Close and allow write on executable file if any is opened */
     if (cur->f_exe){
         file_allow_write(cur->f_exe);

@@ -172,7 +172,7 @@ void process_exit(void) {
         free(trs);
     }
     while (!list_empty(&cur->mmap_lst)) {
-        ce = list_pop_front(mmap_lst);
+        ce = list_pop_front(&cur->mmap_lst);
         cm = list_entry(ce, struct mmap_elem, elem);
         munmap(cm->mapid);
         free(cm);

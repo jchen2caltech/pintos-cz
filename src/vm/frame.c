@@ -73,7 +73,7 @@ void * frame_evict(enum palloc_flags flag) {
                     cf->spt->swap_index = swap_out(cf->physical_addr);
                 }
                 else if (cf->spt->type == SPT_MMAP) {
-                    file_write_at(cf->spt->file, cf->spt->physical_addr, 
+                    file_write_at(cf->spt->file, cf->physical_addr, 
                                   cf->spt->read_bytes, cf->spt->ofs);
                 }
                 list_remove(ce);

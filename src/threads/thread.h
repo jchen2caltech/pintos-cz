@@ -31,6 +31,8 @@ typedef int pid_t;
 #define PRI_MIN 0                       /*!< Lowest priority. */
 #define PRI_DEFAULT 31                  /*!< Default priority. */
 #define PRI_MAX 63                      /*!< Highest priority. */
+#define THREAD_MAX_STACK 2047
+
 
 /*! A kernel thread or user process.
 

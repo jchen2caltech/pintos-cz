@@ -10,6 +10,8 @@
 #include "vm/page.h"
 #include "vm/swap.h"
 
+#define USER_ADDR_BOT 0x8048000
+
 /*! Number of page faults processed. */
 static long long page_fault_cnt;
 
@@ -84,7 +86,7 @@ static void kill(struct intr_frame *f) {
         printf("%s: dying due to interrupt %#04x (%s).\n",
                thread_name(), f->vec_no, intr_name(f->vec_no));
         intr_dump_frame(f);
-        thread_exit(); 
+        exit(-1);
 
     case SEL_KCSEG:
         /* Kernel's code segment, which indicates a kernel bug.
@@ -142,9 +144,11 @@ static void page_fault(struct intr_frame *f) {
     write = (f->error_code & PF_W) != 0;
     user = (f->error_code & PF_U) != 0;
     
-    if (not_present) {
-        /*printf("Fault thread at %s\n", thread_current()->name);
-        printf("Fault address at %x\n", (uint32_t) fault_addr);*/
+    if (fault_addr < USER_ADDR_BOT)
+        exit(-1);
+
+    if (not_present && is_user_vaddr(fault_addr)) {
+        /*printf("Fault thread at %s\n", thread_current()->name); */
         
         st = find_supp_table(pg_round_down(fault_addr));
         
@@ -152,15 +156,20 @@ static void page_fault(struct intr_frame *f) {
             /*printf("Cannot find the supplemental page table...\n");*/
             stack_no = thread_current()->stack_no;
             if ((uint32_t)f->esp + 32 >= (uint32_t)fault_addr && 
-                (uint32_t)f->esp - 32 <= (uint32_t)fault_addr
-                 && fault_addr <= PHYS_BASE - stack_no * PGSIZE) {
-                st = create_stack_supp_table(pg_round_down(fault_addr));
-                fr = obtain_frame(PAL_USER | PAL_ZERO, st);
-                st->fr = fr;
-                ++ thread_current()->stack_no;
-                if (!install_page(st->upage, fr->physical_addr, st->writable))
-                    exit(-1);
-                return;
+                (uint32_t)f->esp - 32 <= (uint32_t)fault_addr &&
+                (uint32_t)fault_addr >= PHYS_BASE - THREAD_MAX_STACK \
+                                                    * PGSIZE) {
+                if (thread_current()->stack_no < THREAD_MAX_STACK) {
+                    st = create_stack_supp_table(pg_round_down(fault_addr));
+                    fr = obtain_frame(PAL_USER | PAL_ZERO, st);
+                    st->fr = fr;
+                    ++ thread_current()->stack_no;
+                    if (!install_page(st->upage, fr->physical_addr, 
+                        st->writable))
+                        exit(-1);
+                    return;
+                }
+                exit(-1);
             }
             else { 
               exit(-1);

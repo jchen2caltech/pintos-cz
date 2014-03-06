@@ -38,7 +38,8 @@ static void syscall_handler(struct intr_frame *f) {
     unsigned f_size, position, size;
     uint32_t fd;
     mapid_t mapping;
-    
+    struct supp_table *st;
+
     /* Retrieve syscall number */
     uint32_t sys_no = read4(f, 0);
     
@@ -91,6 +92,16 @@ static void syscall_handler(struct intr_frame *f) {
         case SYS_READ:
             fd = (uint32_t) read4(f, 4);
             buffer = (void*) read4(f, 8);
+            if ((uint32_t)f->esp - 32 <= (uint32_t)buffer && 
+                (uint32_t)buffer >= PHYS_BASE - THREAD_MAX_STACK * PGSIZE &&
+                !pagedir_get_page(thread_current()->pagedir, buffer)) {
+                st = create_stack_supp_table(pg_round_down(buffer));
+                st->fr = obtain_frame(PAL_USER | PAL_ZERO, st);
+                ++ thread_current()->stack_no;
+                if (!install_page(st->upage, st->fr->physical_addr, 
+                    st->writable))
+                    exit(-1);
+            }
             size = (unsigned) read4(f, 12);
             f->eax = (uint32_t) read(fd, buffer, size);
             break;
@@ -98,6 +109,16 @@ static void syscall_handler(struct intr_frame *f) {
         case SYS_WRITE:
             fd = (uint32_t) read4(f, 4);
             buffer = (void*) read4(f, 8);
+            if ((uint32_t)f->esp - 32 <= (uint32_t)buffer && 
+                (uint32_t)buffer >= PHYS_BASE - THREAD_MAX_STACK * PGSIZE &&
+                !pagedir_get_page(thread_current()->pagedir, buffer)) {
+                st = create_stack_supp_table(pg_round_down(buffer));
+                st->fr = obtain_frame(PAL_USER | PAL_ZERO, st);
+                ++ thread_current()->stack_no;
+                if (!install_page(st->upage, st->fr->physical_addr, 
+                    st->writable))
+                    exit(-1);
+            }
             size = (unsigned) read4(f, 12);
             f->eax = (uint32_t) write(fd, buffer, size);
             break;

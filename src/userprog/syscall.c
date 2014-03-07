@@ -298,19 +298,14 @@ int read(uint32_t fd, void *buffer, unsigned size) {
     uint8_t* addr_e;
     struct supp_table* st;
     
-    /*printf("Reading?!\n");*/
     /* Check the validity of given pointer */
     if ((!checkva(buffer)) || (!checkva(buffer + size))){
-        /*printf("Bad Pointer:%x.\n", buffer);*/
         exit(-1);
     }
     
     for (addr_e = (uint8_t*) pg_round_down(buffer); 
          addr_e < (uint8_t*) buffer + size; addr_e += PGSIZE){
         st = find_supp_table(addr_e);
-        /*printf("the page is %x\n", st->upage);*/
-        /*if (st->writable)*/
-            /*printf("It is writable.\n");*/
         if (st && !st->writable)
             exit(-1);
     }
@@ -345,11 +340,9 @@ int read(uint32_t fd, void *buffer, unsigned size) {
 int write(uint32_t fd, const void *buffer, unsigned size) {
     uint8_t* addr_e;
     struct supp_table *st;
-    /*printf("Using write\n");*/
     /* Check the validity of given pointer */
     if ((!checkva(buffer)) || (!checkva(buffer + size)))
         exit(-1);
-    /*printf("Checking pages.%x, at size %d\n", buffer, size);*/
     /* Checking we are not writing to unwritable pages. */
     
     int write_size = 0;

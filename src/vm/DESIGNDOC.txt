@@ -45,6 +45,7 @@ http://en.wikipedia.org/wiki/Page_replacement_algorithm
 struct frame_table {
     struct list table;          /*! Contains all allocated frames */
     struct lock lock;           /*! Used for synchronization */
+    uint32_t hand;              /*! Current next element to be checked */
 };
 
 struct frame_table_entry {

@@ -62,7 +62,6 @@ struct supp_table * create_supp_table(struct file *file, off_t ofs,
     st->read_bytes = read_bytes;
     st->zero_bytes = zero_bytes;
     st->writable = writable;
-    st->swap_slot = NULL;
     st->fr = NULL;
     st->pinned = false;
    
@@ -119,7 +118,6 @@ struct supp_table * create_mmap_supp_table(struct file *file, off_t ofs,
     st->read_bytes = read_bytes;
     st->zero_bytes = zero_bytes;
     st->writable = writable;
-    st->swap_slot = NULL;
     st->fr = NULL;
     st->pinned = false;
     

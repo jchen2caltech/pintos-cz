@@ -184,7 +184,9 @@ void process_exit(void) {
         /*printf("done unmap\n");*/
     }
     /*printf("hash_destroy\n");*/
+    lock_acquire(&f_table.lock);
     hash_destroy(&cur->s_table, spte_destructor_func);
+    lock_release(&f_table.lock);
     /* Close and allow write on executable file if any is opened */
     /*printf("if fexe\n");*/
     if (cur->f_exe){

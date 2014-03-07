@@ -143,17 +143,17 @@ void spte_destructor_func(struct hash_elem *h, void *aux UNUSED) {
     hash_delete(&thread_current()->s_table, h);
 
     if (s->fr) {
-        lock_acquire(&f_table.lock);
+        //lock_acquire(&f_table.lock);
         list_remove(&s->fr->elem);
         pagedir_clear_page(s->fr->owner->pagedir, s->upage);
         palloc_free_page(s->fr->physical_addr);
         free(s->fr);
-        lock_release(&f_table.lock);
+        //lock_release(&f_table.lock);
     }
     else if (s->type == SPT_SWAP) {
-        lock_acquire(&swap_lock);
+        //lock_acquire(&swap_lock);
         bitmap_set(swap_bm, s->swap_index, 0);
-        lock_release(&swap_lock);
+        //lock_release(&swap_lock);
     }
     free(s);
 }

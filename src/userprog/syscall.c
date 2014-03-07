@@ -305,7 +305,8 @@ int read(uint32_t fd, void *buffer, unsigned size) {
         exit(-1);
     }
     
-    for (addr_e = (uint8_t*) pg_round_down(buffer); addr_e < (uint8_t*) buffer + size; addr_e += PGSIZE){
+    for (addr_e = (uint8_t*) pg_round_down(buffer); 
+         addr_e < (uint8_t*) buffer + size; addr_e += PGSIZE){
         st = find_supp_table(addr_e);
         /*printf("the page is %x\n", st->upage);*/
         /*if (st->writable)*/
@@ -578,8 +579,8 @@ void munmap(mapid_t mapping){
             if (pagedir_is_dirty(t->pagedir, st->upage)){
 
                 lock_acquire(&filesys_lock);
-                pws2 = file_write_at(st->file, st->upage, 
-                                                page_write_size, ofs);
+                pws2 = file_write_at(st->file, st->fr->physical_addr, 
+                                                st->read_bytes, st->ofs);
                 lock_release(&filesys_lock);
                 ASSERT(pws2 == page_write_size);
             }

@@ -366,8 +366,32 @@ for enlisting in thread.
 >> memory subsystem.  Explain how the page fault and eviction
 >> processes differ between swap pages and other pages.
 
+In fact, memory mapping is just using the file as the swap device.
+And mostly we treat a mmap page as a normal page. As creating those
+mmap pages, we use similar methods as in load segments (loading the
+executive files at the begining of the process).
+
+In the page fault handler, we make no special efforts to treate mmap
+page compared to a normal page with file data to load. We will load
+the data from the file in the supplemental page entry at the ofs
+with the amount of read_bytes.
+
+In eviction, unlike other pages (file page or stack page), which will
+be evicted to swap partition, mmap page will be instead write back to
+file if the page is dirty, otherwise just destroy the frame associated
+to this page.
+
 >> C3: Explain how you determine whether a new file mapping overlaps
 >> any existing segment.
+
+In a given mmap call, before we do anything (like allocating the
+supplemental page entries for each to-be-created pages), we will check
+the entire range of the given virtual address to the size, whether
+the corresponding page has already got a supplemental page entry
+in the current process. If it does, this means that the file mapping
+overlaps with the existing segment, we will return MAP_FAIL; otherwise,
+then no overlap occurs, so we will go ahead and create the supplemental
+page entries.
 
 ---- RATIONALE ----
 
@@ -377,6 +401,19 @@ for enlisting in thread.
 >> that much of their implementation can be shared.  Explain why your
 >> implementation either does or does not share much of the code for
 >> the two situations.
+
+Since for our implementation, MMAP pages are exactly the same as
+FILE pages. So we want to maximally use the overlapping code, we
+share most of the code for these two kinds. (Codes mostly shared in
+Page Fault, freeing pages, as the manipulation on pages are the same.)
+However, since we indeed want to distinguish those two, then in creation 
+of the supplemental page entries, we will set FILE page's type as SPT_FILE, 
+while for MMAP page's we set the type as SPT_MMAP. (Similarly, for stack
+page, we have SPT_STACK). Then the only place we have two different
+implementations is in eviction. As we will use the page type to
+distinguish MMAP stack and non-MMAP stack, and evict the MMAP page
+back to its original file (if the page is dirty), instead of the
+swap position.
 
 			   SURVEY QUESTIONS
 			   ================

@@ -59,10 +59,8 @@ tid_t process_execute(const char *file_name) {
     else 
         sema_down(&trs->sem);
 
-    /*if (tid != TID_ERROR && trs->stat == -1)
-        tid = TID_ERROR;*/
-   /* printf("here child thread %d\n", tid);
-    */
+    if (tid != TID_ERROR && trs->load_success == -1)
+        tid = TID_ERROR;
     return tid;
 }
 

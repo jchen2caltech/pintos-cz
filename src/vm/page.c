@@ -63,7 +63,8 @@ struct supp_table * create_supp_table(struct file *file, off_t ofs,
     hash_insert(&(thread_current()->s_table), &st->elem);
     /*printf("hash size after creating: %d\n", hash_size(&(thread_current()->s_table)));
     */
-   /*printf("Creating file supp_page %x in thread: %s %x\n", upage, thread_current()->name, (int)st);
+   /*printf("Creating file supp_page %x in thread: %s %x\n", upage, thread_current()->name, (int)st);*/
+   /*
    if (writable)
        printf("The page is writable.\n");
    else

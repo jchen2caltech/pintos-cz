@@ -85,11 +85,13 @@ static void start_process(void *file_name_) {
     palloc_free_page(file_name);
     cur = thread_current();
     if (success) {
-        cur->trs->stat = success;
+        cur->trs->load_success = success;
         sema_up(&cur->trs->sem);
     }
     else {
-        thread_exit();
+        cur->trs->load_success = success;
+        sema_up(&cur->trs->sem);
+        exit(-1);
     }
 
     /* Start the user process by simulating a return from an

@@ -156,6 +156,8 @@ struct thread {
     enum thread_type type;              /*!< PROCESS or KERNEL */
     struct file* f_exe;                 /*!< Currently opened executable file */
     bool orphan;                        /*!< Whether parent has perished */
+    bool load_success;                  /*!< Indicate whether executable file 
+                                             is successfully loaded */
 
 #endif
     /*! Owned by thread.c. */

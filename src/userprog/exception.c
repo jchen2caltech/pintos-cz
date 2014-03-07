@@ -146,81 +146,95 @@ static void page_fault(struct intr_frame *f) {
     write = (f->error_code & PF_W) != 0;
     user = (f->error_code & PF_U) != 0;
     
+    /* Setting up esp */
     if (t->syscall && t->esp)
+        /* If it is syscall, then the real esp is stored in t->esp */
         esp = t->esp;
     else
+        /* Otherwise, use the f->esp */
         esp = f->esp;
     
-    /*printf("page faulting at %x esp %x thread %s\n", pg_round_down(fault_addr), (int)f->esp,thread_current()->name);*/
-    
-    
     if (fault_addr < USER_ADDR_BOT){
-        /*printf("exiting here, address not in the right range.....\n");*/
+        /* Check fault_addr does not exceed user address bottom*/
         exit(-1);
     }
-    /*printf("ex-1\n\n");*/
+    
     if (not_present && is_user_vaddr(fault_addr)) {
-
-        /*printf("finding the supp table\n");*/
+        /* If not right violation, and fault_addr is in the user space,
+           then it may be a page fault require loading new data. */
+        
+        /* First find out the supplemental page entry*/
         st = find_supp_table(pg_round_down(fault_addr));
-        /*printf("find function returned\n");*/
-        /*printf("ex0.6 %x\n\n", st);*/
         if (!st) {
-            /*printf("Cannot find the supplemental page table...\n");*/
+            /* If not found, then if the fault address is around
+               esp, and above the maximum possilble stack address,
+               then we will allocate a new stack page. */
             stack_no = thread_current()->stack_no;
-            /*printf("ex1\n\n");*/
             if ((uint32_t)esp - 32 <= (uint32_t)fault_addr &&
                 (uint32_t)fault_addr >= PHYS_BASE - THREAD_MAX_STACK \
                                                     * PGSIZE) {
                 if (thread_current()->stack_no < THREAD_MAX_STACK) {
-                    /*printf("ex2\n\n");*/
+                    /* If the current thread has less than the max number 
+                       of stacks, then create a stack supplemental page entry. 
+                     */
                     st = create_stack_supp_table(pg_round_down(fault_addr));
+                    /* Create a new frame.*/
                     fr = obtain_frame(PAL_USER | PAL_ZERO, st);
                     st->fr = fr;
+                    
+                    /* Update the stack number of the process*/
                     ++ thread_current()->stack_no;
+                    
+                    /* Install the page. */
                     if (!install_page(st->upage, fr->physical_addr, 
                         st->writable)) {
-                        /*printf("Cannot install stack page\n");*/
                         exit(-1);
                     }
-                    /*printf("Stack page installed.\n");*/
                     return;
                 }
-                /*printf("too many  stack page\n");*/
+                /* We already have max number of stacks for the process, 
+                 * then exit(-1). */
                 exit(-1);
             }
             else { 
-                /*printf("not a stack page\n");*/
-              exit(-1);
+                /* The given fault address does not satisfy new stack page
+                 * conditions. Thus, exit(-1). */
+                exit(-1);
             }
         }
-        /*printf("ex3\n\n");*/
+        
+        /* Otherwise, the page fault will requires us to load data 
+         * from a file, or in swap partition. 
+         * 
+         * First, obtain a new frame */
+        
         fr = obtain_frame(PAL_USER, st);
         fr->spt = st;
         st->fr = fr;
         st->pinned = true;
 
+        /* If the frame is in swap then swap in. */
         if (st->type == SPT_SWAP) {
             swap_in(fr->physical_addr, st->swap_index);
         }
         
         else {
+            /* Otherwise, we need to load data from file.*/
             if (st->zero_bytes != PGSIZE) {
                 file_seek(st->file, st->ofs);
                 if (file_read(st->file, fr->physical_addr, st->read_bytes) !=
                     (int) st->read_bytes) {
-                    /*printf("File read bytes not as expected.\n");*/
                     exit(-1);
                 }   
             }
-            
+            /* Set zero bytes. */
             memset(fr->physical_addr + st->read_bytes, 0, st->zero_bytes);
         }
+        
+        /* Install the page. */
         if (!install_page(st->upage, fr->physical_addr, st->writable)) {
-            /*printf("Cannot install the page. \n");*/
             exit(-1);
         }
-        /*printf("Page installed\n");*/
         st->pinned = false;
     } else {
 

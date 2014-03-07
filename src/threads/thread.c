@@ -611,6 +611,7 @@ static void init_thread(struct thread *t, const char *name, int priority,
         trs = malloc(sizeof(struct thread_return_status));
         trs->pid = (pid_t)t->tid;
         sema_init(&trs->sem, 0);
+        sema_init(&trs->exec_sem, 0);
         t->trs = trs;
         list_push_back(&(thread_current()->child_returnstats), &trs->elem);
         list_push_back(&thread_current()->child_processes, &t->child_elem);

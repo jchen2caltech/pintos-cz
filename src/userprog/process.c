@@ -57,7 +57,7 @@ tid_t process_execute(const char *file_name) {
     if (tid == TID_ERROR)
         palloc_free_page(fn_copy); 
     else 
-        sema_down(&trs->sem);
+        sema_down(&trs->exec_sem);
 
     if (tid != TID_ERROR && trs->load_success == -1)
         tid = TID_ERROR;
@@ -84,11 +84,11 @@ static void start_process(void *file_name_) {
     cur = thread_current();
     if (success) {
         cur->trs->load_success = 0;
-        sema_up(&cur->trs->sem);
+        sema_up(&cur->trs->exec_sem);
     }
     else {
         cur->trs->load_success = -1;
-        sema_up(&cur->trs->sem);
+        sema_up(&cur->trs->exec_sem);
         thread_exit();
     }
 

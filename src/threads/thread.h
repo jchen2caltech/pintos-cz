@@ -106,6 +106,7 @@ enum thread_type {
 struct thread_return_status {
     pid_t pid;
     struct semaphore sem;
+    struct semaphore exec_sem;
     int stat;
     struct list_elem elem;
     int load_success;                  /*!< Indicate whether executable file 

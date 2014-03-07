@@ -29,6 +29,8 @@
 >> preparing your submission, other than the Pintos documentation, course
 >> text, lecture notes, and course instructors.
 
+http://en.wikipedia.org/wiki/Page_replacement_algorithm
+
 			PAGE TABLE MANAGEMENT
 			=====================
 
@@ -37,6 +39,44 @@
 >> A1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+
+1. Frame table and fte:
+
+struct frame_table {
+    struct list table;          /*! Contains all allocated frames */
+    struct lock lock;           /*! Used for synchronization */
+};
+
+struct frame_table_entry {
+    void *physical_addr;        /*! Address of the actual frame */
+    struct supp_table *spt;     /*! Supp pagetable entry for the page */
+    struct list_elem elem;      /*! List element */
+    struct thread *owner;       /*! Thread that owns the page */
+};
+
+The frame table entry records the frame and corresponding page table
+entry for the page it contains. It is used for allocating new frames
+and evicting old frames. 
+
+2. Supplemental page table entry:
+
+struct supp_table {
+   struct file* file;           /*! File to be loaded (if any) */
+   off_t ofs;                   /*! Offset in file to be loaded (if any) */
+   int type;                    /*! Type of supp-table 
+                                    (FILE, MMAP, STACK or SWAP) */
+   size_t swap_index;           /*! Position in swap-slot (if in) */
+   uint8_t * upage;             /*! Virtual address of the page */
+   uint32_t read_bytes;         /*! Num of bytes to read */
+   uint32_t zero_bytes;         /*! Num of bytes to be set to 0 */
+   bool writable;               /*! If the page is writable */
+   bool pinned;                 /*! If the page is pinned (non-evictable) */
+   struct frame_table_entry* fr;    /*! Frame the page is using */
+   struct hash_elem elem;       /*! Hash element (for supp-table) */
+   struct list_elem map_elem;   /*! List element (for mmap-list) */
+};
+
+The supplemental page table 
 
 ---- ALGORITHMS ----
 

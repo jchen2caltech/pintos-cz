@@ -17,10 +17,11 @@ typedef int mapid_t;
 #define MAP_FAIL ((mapid_t) -1)
 
 struct mmap_elem {
-    mapid_t mapid;
-    struct list s_table;
-    struct file* file;
-    struct list_elem elem;
+    mapid_t mapid;              /*! map id */
+    struct list s_table;        /*! supp table of pages associated with 
+                                    this map */
+    struct file* file;          /*! file pointer */
+    struct list_elem elem;      /*! List element to enlist in thread */
 };
 
 void syscall_init(void);

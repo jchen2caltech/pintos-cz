@@ -8,16 +8,16 @@
 #include "threads/palloc.h"
 
 struct frame_table {
-    struct list table;
-    struct lock lock;
-    uint32_t hand;
+    struct list table;          /*! Contains all allocated frames */
+    struct lock lock;           /*! Used for synchronization */
+    uint32_t hand;              /*! Current next element to be checked */
 };
 
 struct frame_table_entry {
-    void *physical_addr;
-    struct supp_table *spt;
-    struct list_elem elem;
-    struct thread *owner;
+    void *physical_addr;        /*! Address of the actual frame */
+    struct supp_table *spt;     /*! Supp pagetable entry for the page */
+    struct list_elem elem;      /*! List element */
+    struct thread *owner;       /*! Thread that owns the page */
 };
 
 void frame_table_init(void);

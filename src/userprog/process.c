@@ -83,13 +83,13 @@ static void start_process(void *file_name_) {
     palloc_free_page(file_name);
     cur = thread_current();
     if (success) {
-        cur->trs->load_success = success;
+        cur->trs->load_success = 0;
         sema_up(&cur->trs->sem);
     }
     else {
-        cur->trs->load_success = success;
+        cur->trs->load_success = -1;
         sema_up(&cur->trs->sem);
-        exit(-1);
+        thread_exit();
     }
 
     /* Start the user process by simulating a return from an
@@ -319,7 +319,7 @@ bool load(const char *cmdline, void (**eip) (void), void **esp) {
     file = filesys_open(prog_name);
     
     if (file == NULL) {
-        /*printf("load: %s: open failed\n", prog_name);*/
+        printf("load: %s: open failed\n", prog_name);
         goto done; 
     }
     t->f_exe = file;

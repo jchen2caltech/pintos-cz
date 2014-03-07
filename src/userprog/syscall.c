@@ -305,7 +305,8 @@ int read(uint32_t fd, void *buffer, unsigned size) {
         exit(-1);
     }
     
-    for (addr_e = (uint8_t*) pg_round_down(buffer); addr_e < (uint8_t*) buffer + size; addr_e += PGSIZE){
+    for (addr_e = (uint8_t*) pg_round_down(buffer); 
+         addr_e < (uint8_t*) buffer + size; addr_e += PGSIZE){
         st = find_supp_table(addr_e);
         /*printf("the page is %x\n", st->upage);*/
         /*if (st->writable)*/

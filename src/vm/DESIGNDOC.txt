@@ -54,6 +54,8 @@ struct frame_table_entry {
     struct thread *owner;       /*! Thread that owns the page */
 };
 
+struct frame_table f_table;     /*! Global variable frame table */
+
 The frame table entry records the frame and corresponding page table
 entry for the page it contains. It is used for allocating new frames
 and evicting old frames. 
@@ -76,26 +78,141 @@ struct supp_table {
    struct list_elem map_elem;   /*! List element (for mmap-list) */
 };
 
-The supplemental page table 
+The supplemental page table contains information that will be used to
+handle page_fault. There are four types of usages for the supp-pagetable,
+namely file-loading, m-mapping, stack-growing and swapping-in blocks.
+
+3. Thread:
+
+struct thread {
+    /*! Owned by thread.c. */
+    /**@{*/
+    tid_t tid;                          /*!< Thread identifier. */
+    enum thread_status status;          /*!< Thread state. */
+    char name[16];                      /*!< Name (for debugging purposes). */
+    uint8_t *stack;                     /*!< Saved stack pointer. */
+    int nice;                           /*!< Niceness of the thread.*/
+    int32_t recent_cpu;                     /*!< Recent_cpu of the thread */
+    int priority;                       /*!< Intrinsic Priority. */
+    int donated_priority;               /*!< Priority donated by other threads.*/
+    struct list_elem allelem;           /*!< List element for all threads list. */
+    struct list_elem elem;              /*!< List element */
+    /**@}*/
+
+    /*! Shared between thread.c and synch.c. */
+    /**@{*/
+    struct lock * waiting_lock;         /*!< The lock that the thread is waiting on. */
+
+    /**@}*/
+
+    int64_t wakeup_time;                /*!< Wake up time of the thread */
+
+    struct list locks;                  /*!< List of locks acquired by the thread */
+#ifdef USERPROG
+    /*! Owned by userprog/process.c. */
+    /**@{*/
+    uint32_t *pagedir;                  /*!< Page directory. */
+    struct hash s_table;                /*!< Supplemental page table*/
+    uint32_t stack_no;                  /*!< total number of stack of PGSIZE allocated */
+    struct list mmap_lst;               /*!< The list for mmap structs */
+    mapid_t mmapid_max;                 /*!< Current maximum mmap id */
+    bool syscall;                       /*!< Whether the thread has just been in syscall. */ 
+    void * esp;                         /*!< saved esp from syscall. */
+    /**@{*/
+    struct list child_returnstats;      /*!< List of child process return-stats */
+    struct thread_return_status *trs;   /*!< Return-stats of this thread */
+    struct list child_processes;        /*!< List of child processes */
+    struct list_elem child_elem;        /*!< List element as parent's child */
+    struct thread * parent;             /*!< Parent thread */
+    struct list f_lst;                  /*!< List of opened files */
+    uint32_t f_count;                   /*!< Number of opened files */
+    uint32_t fd_max;                    /*!< Current largest file-descriptor number */
+    enum thread_type type;              /*!< PROCESS or KERNEL */
+    struct file* f_exe;                 /*!< Currently opened executable file */
+    bool orphan;                        /*!< Whether parent has perished */
+
+#endif
+    /*! Owned by thread.c. */
+    /**@{*/
+    unsigned magic;                     /* Detects stack overflow. */
+    /**@}*/
+};
+
+6 new members have been added to the thread struct:
+    - s_table
+      A hash table that contains supp-table-entry of all pages owned
+      by the thread
+    - stack_no
+      Number of stacks allocated by this thread
+    - mmap_lst
+      list of mmap structs owned by this thread
+    - mmapid_max
+      Maximum mapid allocated by this thread
+    - syscall
+      Whether this thread has just been in syscall (affects pagefault)
+    - esp
+      Saves esp position, if the thread has just been in syscall
+
 
 ---- ALGORITHMS ----
 
 >> A2: In a few paragraphs, describe your code for locating the frame,
 >> if any, that contains the data of a given page.
 
+1. When a pagefault occurs, find_supp_table() is called to find if 
+a supp_table entry has already been created. 
+2. If not, then the handler will determine if it is a stack operation,
+and if so, the stack will be extended. Otherwise, the process will
+exit. 
+3. If a spte has already been created, the handler will call
+obtain_frame() to allocate a frame for the page. 
+4. The handler will then check the type of the entry to 
+see if it is SWAP, FILE or MMAP. For the SWAP, a swap_in is called to
+map the file back into the frame that is just allocated.
+For file and mmap, write() if called to write the data from file
+to the frame. 
+
 >> A3: How does your code coordinate accessed and dirty bits between
 >> kernel and user virtual addresses that alias a single frame, or
 >> alternatively how do you avoid the issue?
+
+The kernel always access the user memory via user virtual address,
+indicated by the upage member contained in the spte, 
+so that aliasing issue is prevented.
 
 ---- SYNCHRONIZATION ----
 
 >> A4: When two user processes both need a new frame at the same time,
 >> how are races avoided?
 
+Any modifications to the frame table requires holding the frame lock.
+Thus, if one thread is in the middle of evicting a frame, adding a
+frame, or free-ing a frame from the frame table, other threads that
+attempts to update the frame table needs to wait until the holder
+is done. 
+
 ---- RATIONALE ----
 
 >> A5: Why did you choose the data structure(s) that you did for
 >> representing virtual-to-physical mappings?
+
+Most of the data structures are self-explanatory, so I will comment
+on only a few things:
+1. Supplemental Page Table:
+    We used hash table as our data structure for recording the 
+    pages owned by a thread. We used the virtual address of the page
+    as the hash key, and we do this because it is fast.
+2. Swap Slot:
+    We used bitmap to manage the swap slot usage, and it turns out
+    to be fast and convenient too. It is easy to get, free and test
+    a swap block this way. 
+3. boolean "syscall" and "esp" in thread struct:
+    We use them in the pagefault handler to decide whether to use
+    the f->esp or to use the saved esp. Because the system only
+    saves the esp when switching from user to kernel mode, and 
+    if the thread has just been in the syscall handler, the f->esp
+    will be an undefined value in the pf-handler. 
+4. See following comments for 
 
 		       PAGING TO AND FROM DISK
 		       =======================
@@ -106,18 +223,57 @@ The supplemental page table
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+1. Swap slot:
+
+/* Global variables for swap-slot management. */
+struct block *swap_block;
+struct lock swap_lock;
+struct bitmap *swap_bm;
+
+swap_block is the pointer to the memory block used for swapping. swap_bm is
+a bitmap that manages the usage of the swap block, and can be used to quickly
+find, allocate and free blocks. swap_lock is used for synchronization. 
+
+Other structures, such as the supp_table entry, the frame_table_entry, and
+the new thread members, are also important to paging to and from the disk.
+
 ---- ALGORITHMS ----
 
 >> B2: When a frame is required but none is free, some frame must be
 >> evicted.  Describe your code for choosing a frame to evict.
 
+Circularly go through the list of frames, with the following rules:
+1. If a frame's accessed bit is set, skip it and reset the bit. 
+2. If a frame's accessed bit is clear, enter further checking. 
+    2.1 If a frame's corresponding spte indicates "pinned", skip it.
+    2.2 If not, swap the frame out to the swap-slot if it is not 
+        of type SPT_MMAP.
+    2.3 If it is of type SPT_MMAP, and if its dirty-bit it set, 
+        the page will be write back to its mmap'd file. 
+    2.4 The frame will then become the frame to evict.  
+
 >> B3: When a process P obtains a frame that was previously used by a
 >> process Q, how do you adjust the page table (and any other data
 >> structures) to reflect the frame Q no longer has?
 
+The spte that Q owns will have the spte->fr field cleared, indicating
+that the frame has been evicted and belongs no longer to Q. There will
+be no remains for the old frame, and everything is free'd. 
+
 >> B4: Explain your heuristic for deciding whether a page fault for an
 >> invalid virtual address should cause the stack to be extended into
 >> the page that faulted.
+
+Our condition for a stack operation is:
+    not_present &&
+    !supp_table_find(page) &&
+    (fault_addr >= (uint32_t)esp - 32 &&
+    (uint32_t)fault_addr >= PHYS_BASE - THREAD_MAX_STACK * PGSIZE)
+
+A stack pagefault will not occur beyond 32 bytes under the current esp,
+and it should not occur under the maximum allowed stack line. Also, 
+a stack pagefault doesn't have a supp_table entry pre-set up for it. 
+
 
 ---- SYNCHRONIZATION ----
 
@@ -126,21 +282,48 @@ The supplemental page table
 >> textbook for an explanation of the necessary conditions for
 >> deadlock.)
 
+The following synchronization measures are taken:
+
+    - frame_lock:   Avoids frame table race
+    - swap_lock:    Avoids swap block race
+    - pinned:       A page being actively used by the pagefault handler
+                    is pinned to avoid eviction
+
+Deadlocks occurs when two threads, each holding one or more locks, 
+both want a lock that each other holds. We try to avoid deadlock conditions
+by carefully checking code that requires holding two locks at the same time, 
+to make sure that the order of acquiring the locks in such situation is
+unique.
+(That is, operations that needs lock A & B will let the thread always
+acquire A first, and then try to acquire B.)
+
 >> B6: A page fault in process P can cause another process Q's frame
 >> to be evicted.  How do you ensure that Q cannot access or modify
 >> the page during the eviction process?  How do you avoid a race
 >> between P evicting Q's frame and Q faulting the page back in?
+
+When Q is accessing Q's page in the pagefault/syscall handler, the 
+page is set to be pinned, and thus the eviction process will skip Q's
+frame. 
+As P is eviting Q's page, it instantly sets the spte->fr field to NULL,
+so that Q must reload the frame back in to access it. 
 
 >> B7: Suppose a page fault in process P causes a page to be read from
 >> the file system or swap.  How do you ensure that a second process Q
 >> cannot interfere by e.g. attempting to evict the frame while it is
 >> still being read in?
 
+Again, as said in B6, the "pinned" is used to avoid such interference.
+
 >> B8: Explain how you handle access to paged-out pages that occur
 >> during system calls.  Do you use page faults to bring in pages (as
 >> in user programs), or do you have a mechanism for "locking" frames
 >> into physical memory, or do you use some other design?  How do you
 >> gracefully handle attempted accesses to invalid virtual addresses?
+
+We access unmapped pages that occurs during syscalls by manually mapping
+the pages in. The syscall handler will also pin the pages so that 
+they will not be evicted. 
 
 ---- RATIONALE ----
 
@@ -151,6 +334,10 @@ The supplemental page table
 >> where your design falls along this continuum and why you chose to
 >> design it this way.
 
+We used a combinations of struct boolean fields, locks and semaphores
+to implement synchronization. This way, parallelism is still possible
+but deadlocks will be unlikely. 
+
 			 MEMORY MAPPED FILES
 			 ===================
 
@@ -159,6 +346,19 @@ The supplemental page table
 >> C1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+
+1. mmap
+
+struct mmap_elem {
+    mapid_t mapid;
+    struct list s_table;
+    struct file* file;
+    struct list_elem elem;
+};
+
+mmap_elem is used to record memory mapped files. s_table contains 
+spte of all the pages allocated for this mmap file, and elem is used
+for enlisting in thread. 
 
 ---- ALGORITHMS ----
 

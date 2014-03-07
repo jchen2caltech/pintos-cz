@@ -69,17 +69,18 @@ void * frame_evict(enum palloc_flags flag) {
                 if ((pagedir_is_dirty(ct->pagedir, cf->spt->upage) ||
                     cf->spt->type == SPT_SWAP) && 
                     cf->spt->type != SPT_MMAP) {
+                    cf->spt->fr = NULL;
                     cf->spt->type = SPT_SWAP;
                     cf->spt->swap_index = swap_out(cf->physical_addr);
                 }
                 else if (cf->spt->type == SPT_MMAP) {
+                    cf->spt->fr = NULL;
                     file_write_at(cf->spt->file, cf->physical_addr, 
                                   cf->spt->read_bytes, cf->spt->ofs);
                 }
                 list_remove(ce);
                 pagedir_clear_page(ct->pagedir, cf->spt->upage);
                 palloc_free_page(cf->physical_addr);
-                cf->spt->fr = NULL;
                 free(cf);
                 lock_release(&f_table.lock);
                 return palloc_get_page(flag);

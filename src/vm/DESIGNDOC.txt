@@ -321,9 +321,10 @@ Again, as said in B6, the "pinned" is used to avoid such interference.
 >> into physical memory, or do you use some other design?  How do you
 >> gracefully handle attempted accesses to invalid virtual addresses?
 
-We access unmapped pages that occurs during syscalls by manually mapping
-the pages in. The syscall handler will also pin the pages so that 
-they will not be evicted. 
+We access unmapped pages that occurs during syscalls using the pagefault
+handler. The syscall handler will set the thread->syscall boolean and
+save the esp pointer for the pagefault handler to use, and the pf
+handler will pin the page being actively used.
 
 ---- RATIONALE ----
 
@@ -350,10 +351,11 @@ but deadlocks will be unlikely.
 1. mmap
 
 struct mmap_elem {
-    mapid_t mapid;
-    struct list s_table;
-    struct file* file;
-    struct list_elem elem;
+    mapid_t mapid;              /*! map id */
+    struct list s_table;        /*! supp table of pages associated with 
+                                    this map */
+    struct file* file;          /*! file pointer */
+    struct list_elem elem;      /*! List element to enlist in thread */
 };
 
 mmap_elem is used to record memory mapped files. s_table contains 

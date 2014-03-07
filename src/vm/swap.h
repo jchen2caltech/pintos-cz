@@ -13,9 +13,9 @@
 #include "threads/synch.h"
 #define SECTORS_PER_PAGE (PGSIZE / BLOCK_SECTOR_SIZE)
 
-struct block *swap_block;
-struct lock swap_lock;
-struct bitmap *swap_bm;
+struct block *swap_block;   /*! Swap block */
+struct lock swap_lock;      /*! Swap lock used for synchronization */
+struct bitmap *swap_bm;     /*! Swap bitmap used for managing swap block */
 
 void swap_init(void);
 size_t swap_out(void *frame);

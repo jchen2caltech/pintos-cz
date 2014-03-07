@@ -10,6 +10,7 @@
 struct frame_table {
     struct list table;
     struct lock lock;
+    uint32_t hand;
 };
 
 struct frame_table_entry {

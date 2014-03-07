@@ -70,7 +70,8 @@ void * frame_evict(enum palloc_flags flag) {
                     cf->spt->type = SPT_SWAP;
                     cf->spt->swap_index = swap_out(cf->physical_addr);
                 }
-                else if (cf->spt->type == SPT_MMAP) {
+                else if (cf->spt->type == SPT_MMAP && 
+                         pagedir_is_dirty(ct->pagedir, cf->spt->upage)) {
                     file_write_at(cf->spt->file, cf->physical_addr, 
                                   cf->spt->read_bytes, cf->spt->ofs);
                 }

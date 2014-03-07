@@ -578,8 +578,8 @@ void munmap(mapid_t mapping){
             if (pagedir_is_dirty(t->pagedir, st->upage)){
 
                 lock_acquire(&filesys_lock);
-                pws2 = file_write_at(st->file, st->upage, 
-                                                page_write_size, ofs);
+                pws2 = file_write_at(st->file, st->fr->physical_addr, 
+                                                st->read_bytes, st->ofs);
                 lock_release(&filesys_lock);
                 ASSERT(pws2 == page_write_size);
             }

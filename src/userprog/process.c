@@ -159,7 +159,6 @@ void process_exit(void) {
     } else {
         free(cur->trs);
     }
-
     /* Tell all the childs that they have become orphans */
     old_level = intr_disable();
     while (!list_empty(&cur->child_processes)) {
@@ -185,7 +184,6 @@ void process_exit(void) {
     hash_destroy(&cur->s_table, spte_destructor_func);
     lock_release(&f_table.lock);
     /* Close and allow write on executable file if any is opened */
-
     if (cur->f_exe){
         file_allow_write(cur->f_exe);
         file_close(cur->f_exe);

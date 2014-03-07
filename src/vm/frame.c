@@ -80,6 +80,7 @@ void * frame_evict(enum palloc_flags flag) {
             else {
                 /* Swap out the page! */
                 if (cf->spt->type != SPT_MMAP) {
+                    cf->spt->fr = NULL;
                     cf->spt->type = SPT_SWAP;
                     cf->spt->swap_index = swap_out(cf->physical_addr);
                 }

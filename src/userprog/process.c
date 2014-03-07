@@ -51,8 +51,6 @@ tid_t process_execute(const char *file_name) {
     /* Create a new thread to execute FILE_NAME. */
     tid = thread_create2(prog_name, PRI_DEFAULT, start_process, fn_copy, 
                          THREAD_PROCESS);
-    /*printf("creating child thread %d\n", tid);
-    */
     trs = thread_findchild(tid);
     if (tid == TID_ERROR)
         palloc_free_page(fn_copy); 
@@ -181,19 +179,20 @@ void process_exit(void) {
         ce = list_begin(&(cur->mmap_lst));
         cm = list_entry(ce, struct mmap_elem, elem);
         munmap(cm->mapid);
-        /*printf("done unmap\n");*/
     }
     /*printf("hash_destroy\n");*/
+    lock_acquire(&f_table.lock);
     hash_destroy(&cur->s_table, spte_destructor_func);
+    lock_release(&f_table.lock);
     /* Close and allow write on executable file if any is opened */
-    /*printf("if fexe\n");*/
+
     if (cur->f_exe){
         file_allow_write(cur->f_exe);
         file_close(cur->f_exe);
         cur->f_exe = NULL;
     }
+    
     pd = cur->pagedir;
-    /*printf("pd null\n");*/
     if (pd != NULL) {
         /* Correct ordering here is crucial.  We must set
            cur->pagedir to NULL before switching page directories,
@@ -202,11 +201,8 @@ void process_exit(void) {
            directory before destroying the process's page
            directory, or our active page directory will be one
            that's been freed (and cleared). */
-
         cur->pagedir = NULL;
-
         pagedir_activate(NULL);
-
         pagedir_destroy(pd);
 
     }
@@ -313,8 +309,7 @@ bool load(const char *cmdline, void (**eip) (void), void **esp) {
     process_activate();
     
     get_prog_name(cmdline, prog_name);
-    /*printf("Loading the program %s\n", prog_name);
-    */
+    
     /* Open executable file. */
     file = filesys_open(prog_name);
     
@@ -392,7 +387,6 @@ bool load(const char *cmdline, void (**eip) (void), void **esp) {
         }
     }
     
-
     /* Set up stack. */
     if (!setup_stack(esp))
         goto done;
@@ -402,9 +396,6 @@ bool load(const char *cmdline, void (**eip) (void), void **esp) {
     /*Passng Arguments*/
     if (!arg_pass(cmdline, esp))
         goto done;
-
-    
-    
 
     success = true;
     /*printf("done loading!! success!!\n");*/
@@ -488,28 +479,12 @@ static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
         size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
         size_t page_zero_bytes = PGSIZE - page_read_bytes;
         
+        /* Create a supplemental page table for this page. Lazy loading...*/
         create_supp_table(file, ofs, upage, page_read_bytes, 
                                page_zero_bytes, writable);
 
-        /* Get a page of memory. */
-        /*uint8_t *kpage = palloc_get_page(PAL_USER);
-        if (kpage == NULL)
-            return false;*/
-
-        /* Load this page. */
-        /*if (file_read(file, kpage, page_read_bytes) != (int) page_read_bytes) {
-            palloc_free_page(kpage);
-            return false;
-        }
-        memset(kpage + page_read_bytes, 0, page_zero_bytes);*/
-
-        /* Add the page to the process's address space. */
-        /*if (!install_page(upage, kpage, writable)) {
-            palloc_free_page(kpage);
-            return false; 
-        }*/
-        
-        /* Advance. */
+        /* Update remaining read_bytes and zero_bytes;
+         * Update upage and ofs for the next page. */
         read_bytes -= page_read_bytes;
         zero_bytes -= page_zero_bytes;
         upage += PGSIZE;
@@ -521,28 +496,27 @@ static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
 /*! Create a minimal stack by mapping a zeroed page at the top of
     user virtual memory. */
 static bool setup_stack(void **esp) {
-    /*uint8_t *kpage;
-    bool success = false;
-
-    kpage = palloc_get_page(PAL_USER | PAL_ZERO);
-    if (kpage != NULL) {
-        success = install_page(((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-        if (success)
-            *esp = PHYS_BASE ;
-        else
-            palloc_free_page(kpage);
-    }
-    return success;*/
     
     struct frame_table_entry *fr;
     struct supp_table * st;
     bool success = false;
+    
     ASSERT(thread_current()->stack_no == 0);
+    /* Create a new stack supplemental page table. */
     st = create_stack_supp_table(((uint8_t*) PHYS_BASE) - PGSIZE);
+    
+    /* Directly obtain the frame, as this is a the first stack for this 
+     * process. Also set up the supplemental page table's frame, and
+     * the number of stacks in this process is updated as 1 */
     fr = obtain_frame(PAL_USER | PAL_ZERO, st);
     st->fr = fr;
     thread_current()->stack_no = 1;
-    success = install_page(((uint8_t *) PHYS_BASE) - PGSIZE, fr->physical_addr, true);
+    
+    /* Install the page.*/
+    success = install_page(((uint8_t *) PHYS_BASE) - PGSIZE, 
+                           fr->physical_addr, true);
+    
+    /* Setup the stack pointer. */
     if (success)
         *esp = PHYS_BASE ;
     return success;

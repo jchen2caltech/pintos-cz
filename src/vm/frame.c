@@ -66,10 +66,7 @@ void * frame_evict(enum palloc_flags flag) {
             if (pagedir_is_accessed(ct->pagedir, cf->spt->upage))
                 pagedir_set_accessed(ct->pagedir, cf->spt->upage, false);
             else {
-                if ((pagedir_is_dirty(ct->pagedir, cf->spt->upage) ||
-                    cf->spt->type == SPT_SWAP) && 
-                    cf->spt->type != SPT_MMAP) {
-                    cf->spt->fr = NULL;
+                if (cf->spt->type != SPT_MMAP) {
                     cf->spt->type = SPT_SWAP;
                     cf->spt->swap_index = swap_out(cf->physical_addr);
                 }

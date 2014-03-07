@@ -47,9 +47,14 @@ static void syscall_handler(struct intr_frame *f) {
     void *buffer; 
     pid_t pid;
     
+    /* The following is for page fault in syscall.
+     * Set the thread's syscall status as true.
+     * Store the current esp in the thread's esp field */
     t->syscall = true;
     t->esp = f->esp;
-    /*printf("doing syscall %d and saving esp: %x\n", sys_no, t->esp);*/
+
+    /* Note after each syscall is about to finish, we will
+     * set the thread's syscall status back to false. */
     switch (sys_no) {
         case SYS_HALT:
             halt();
@@ -58,7 +63,6 @@ static void syscall_handler(struct intr_frame *f) {
             break;
             
         case SYS_EXIT:
-            
             status = (int) read4(f, 4);
             exit(status);
             t->syscall = false;
@@ -78,11 +82,8 @@ static void syscall_handler(struct intr_frame *f) {
             break;
             
         case SYS_CREATE:
-            
             f_name = (const char*) read4(f, 4);
-
             f_size = (unsigned) read4(f, 8);
-
             f->eax = (uint32_t) create(f_name, f_size);
             t->syscall = false;
             t->esp = NULL;
@@ -108,24 +109,8 @@ static void syscall_handler(struct intr_frame *f) {
             break;
             
         case SYS_READ:
-            
-            
             fd = (uint32_t) read4(f, 4);
-            
             buffer = (void*) read4(f, 8);
-            /*
-            if ((uint32_t)f->esp - 32 <= (uint32_t)buffer && 
-                is_user_vaddr(buffer) &&
-                (uint32_t)buffer >= PHYS_BASE - 16 * PGSIZE &&
-                !pagedir_get_page(thread_current()->pagedir, buffer)) {
-                printf("creating stack growth");
-                st = create_stack_supp_table(pg_round_down(buffer));
-                st->fr = obtain_frame(PAL_USER | PAL_ZERO, st);
-                ++ thread_current()->stack_no;
-                if (!install_page(st->upage, st->fr->physical_addr, 
-                    st->writable))
-                    exit(-1);
-            }*/
             size = (unsigned) read4(f, 12);
             f->eax = (uint32_t) read(fd, buffer, size);
             t->syscall = false;
@@ -133,20 +118,8 @@ static void syscall_handler(struct intr_frame *f) {
             break;
             
         case SYS_WRITE:
-
             fd = (uint32_t) read4(f, 4);
             buffer = (void*) read4(f, 8);
-            /*if ((uint32_t)f->esp - 32 <= (uint32_t)buffer && 
-                is_user_vaddr(buffer) &&
-                (uint32_t)buffer >= PHYS_BASE - 16 * PGSIZE &&
-                !pagedir_get_page(thread_current()->pagedir, buffer)) {
-                st = create_stack_supp_table(pg_round_down(buffer));
-                st->fr = obtain_frame(PAL_USER | PAL_ZERO, st);
-                ++ thread_current()->stack_no;
-                if (!install_page(st->upage, st->fr->physical_addr, 
-                    st->writable))
-                    exit(-1);
-            }*/
             size = (unsigned) read4(f, 12);
             f->eax = (uint32_t) write(fd, buffer, size);
             t->syscall = false;
@@ -215,7 +188,6 @@ void halt(void) {
 /*! exit */
 void exit(int status) {
     struct thread *t;
-    
     t = thread_current();
     t->trs->stat = status;
     t->parent = NULL;
@@ -448,8 +420,6 @@ void close(uint32_t fd) {
    and has been mapped. */
 
 bool checkva(const void* va){
-    struct thread *t = thread_current();
-    /*return (is_user_vaddr(va) && (pagedir_get_page(t->pagedir, va) != NULL));*/
     return (is_user_vaddr(va) && va);
 }
 
@@ -475,7 +445,9 @@ struct f_info* findfile(uint32_t fd) {
     
 }
 
+/*! Memory map from file to user address. */
 mapid_t mmap(uint32_t fd, void* addr){
+    
     int f_size;
     void* addr_e;
     mapid_t mapid;
@@ -488,8 +460,10 @@ mapid_t mmap(uint32_t fd, void* addr){
     struct supp_table* st;
     struct thread* t = thread_current();
     
-    /*printf("Start mapping...\n");*/
-    
+    /* Check for the invalid conditions:
+     * fd is standard io; file size of the given fd is 0; give user address
+     * is not valie; given address is not page aligned; given address is 0.
+     * If invalid, then return MAP_FAIL. */
     if (fd == STDIN_FILENO ||
         fd == STDOUT_FILENO ||
         filesize(fd) == 0 ||
@@ -499,36 +473,47 @@ mapid_t mmap(uint32_t fd, void* addr){
             return MAP_FAIL;
     }
     
-    /*printf("where does it stuck?!");*/
+    /* Get the file size of the file. And check the entire range of the
+     * to-be-mapped user address does not overlap with any already allocated
+     * pages. */
     f_size = filesize(fd);
     for (addr_e = addr; addr_e < addr + f_size; addr_e += PGSIZE){
             if (find_supp_table(addr_e) != NULL){
-                /*printf("Hello\n");*/
+                /* If found a supplemental page entry of this page address,
+                 * Then this is already alocated. Return MAP_FAIL. */
                 return MAP_FAIL;
             }   
     }
     
+    /* Increment the thread's max mmapid to give this mmapping a unque ID. */
     ++ t->mmapid_max;
     mapid = t->mmapid_max;
+    
+    /* Allocated the new mmap struct */
     me = (struct mmap_elem*) malloc(sizeof(struct mmap_elem));
     if (me == NULL)
         return MAP_FAIL;
     
+    /* Reopen the file according to the file descriptor. */
     f = findfile(fd);
-    
     lock_acquire(&filesys_lock);
     file = file_reopen(f->f);
     lock_release(&filesys_lock);
     
+    /* If the file is NULL, then free the struct and return MAP_FAIL. */
     if (file == NULL){
         free(me);
         return MAP_FAIL;
     }
     
+    /* Setup the fields of the mmap struct.*/
     me->file = file;
     me->mapid = mapid;
+    /* Push the mmap struct to the list of mmap of this process. */
     list_push_back(&(t->mmap_lst), &(me->elem));
     list_init(&(me->s_table));
+    
+    /* Allocate pages for the read-in file data.*/
     upage = addr;
     ofs = 0;
     read_bytes = f_size;
@@ -538,100 +523,105 @@ mapid_t mmap(uint32_t fd, void* addr){
     else
         zero_bytes = PGSIZE - read_bytes;
     
-    /*printf("Starting giving pages...\n");*/
     while (read_bytes > 0) {
         /* Calculate how to fill this page.
            We will read PAGE_READ_BYTES bytes from FILE
            and zero the final PAGE_ZERO_BYTES bytes. */
         size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
         size_t page_zero_bytes = PGSIZE - page_read_bytes;
-        /*printf("Here? offset: %d at upage %x\n", ofs, upage);*/
+        
+        /* Create a new supplemental page entry for this page*/
         st = create_mmap_supp_table(file, ofs, upage, page_read_bytes, 
                                     page_zero_bytes, true);
-
+        /* Push the page entry to the mmap struct's list */
         list_push_back(&(me->s_table), &(st->map_elem));
+        
+        /* Update the remaining read_bytes, zero_bytes;
+         * Update upage, and ofs. This is for the next page to load the file.*/
         read_bytes -= page_read_bytes;
         zero_bytes -= page_zero_bytes;
-        /*printf("Allocating page %x, with read_bytes %d\n", upage, page_read_bytes);
-        */
         upage += PGSIZE;
         ofs += page_read_bytes;
         
     }
-    /*printf("Mapping done!! %d\n", mapid);*/
     return mapid;
 }
 
-
+/*! Memory ummap according the given mapid. */
 void munmap(mapid_t mapping){
+    
     uint32_t f_size, write_bytes, page_write_size, pws2;
     off_t ofs = 0;
     struct list_elem *e;
     struct supp_table* st;
+    
+    /* First find the mmap struct according to the given mapid. */
     struct mmap_elem *me = find_mmap_elem(mapping);
     struct thread* t = thread_current();
     
-    /*printf("Unmapping %d\n", mapping);*/
-    
+    /* Get the file length. And set write_bytes as file length.*/
     f_size = file_length(me->file);
     write_bytes = f_size;
-    /*printf("1\n\n\n");*/
+    
+    /* Freeing all the pages in this mmap struct. */
     while (!list_empty(&me->s_table)) {
         e = list_pop_front(&me->s_table);
         st = list_entry(e, struct supp_table, map_elem);
-        /*printf("Unmapping upage %x\n", st->upage);
-        printf("2\n\n\n");*/
         if (st->fr) {
-            /*printf("3\n\n\n");*/
+            /* Set up how many bytes is going to be freed in this page. */
             if (write_bytes >= PGSIZE)
                 page_write_size = PGSIZE;
             else
                 page_write_size = write_bytes;
-            /*printf("4\n\n\n");*/
+
+            /* If the page is dirty, then write back the data to the file. */
             if (pagedir_is_dirty(t->pagedir, st->upage)){
-                /*printf("5\n\n\n");*/
+
                 lock_acquire(&filesys_lock);
-                /*printf("7 %x %x\n", st->file, me->file);*/
                 pws2 = file_write_at(st->file, st->upage, 
                                                 page_write_size, ofs);
-                /*printf("8\n\n");*/
                 lock_release(&filesys_lock);
-                /*printf("6\n\n\n");*/
                 ASSERT(pws2 == page_write_size);
             }
+            
+            /* Update the offset for file writing.*/
             ofs += page_write_size;
+            /* Update remaining write_bytes.*/
             write_bytes -= page_write_size;
         }
-        /*printf("hello\n");*/
+        /* Destroy the freed supplemental page entry.*/
         spte_destructor_func(&(st->elem), NULL);
     }
-    /*printf("helloagain\n");*/
+
+    /* Close the file. */
     file_close(me->file);
-    /*printf("1\n");*/
+    /* Remove the mmap struct from the mmap list of this process. */
     list_remove(&(me->elem));
-    /*printf("2\n");*/
+    /* Free the memory of this struct. */
     free(me);
-    /*printf("3\n");*/
 }
 
+/*! Given a mapid, look for and return the corresponding mapid struct
+ * of this process */
 struct mmap_elem* find_mmap_elem(mapid_t mapid){
+    
     struct list_elem *e;
     struct thread* t = thread_current();
     struct list* m_lst = &(t->mmap_lst);
     struct mmap_elem* me;
     
+    /* Check for the validity of this mapid. */
     if (mapid == MAP_FAIL && mapid > t->mmapid_max) {
-        printf("Mapid is out of range.\n");
         exit(-1);
     }
     
+    /* Iterate through the mapid list of the process, and check for
+     * the mapid */
     for (e = list_begin(m_lst); e != list_end(m_lst); e = list_next(e)){
         me = list_entry(e, struct mmap_elem, elem);
         if (mapid == me->mapid)
             return me;
     }
     
-    printf("Mapid is not found.\n");
     exit(-1);
-    
 }

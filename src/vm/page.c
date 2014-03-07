@@ -63,9 +63,13 @@ struct supp_table * create_supp_table(struct file *file, off_t ofs,
     hash_insert(&(thread_current()->s_table), &st->elem);
     /*printf("hash size after creating: %d\n", hash_size(&(thread_current()->s_table)));
     */
-   /* printf("Creating file supp_page %x in thread: %s %x\n", upage, thread_current()->name, (int)st);
-    */
-    return st;
+   /*printf("Creating file supp_page %x in thread: %s %x\n", upage, thread_current()->name, (int)st);
+   if (writable)
+       printf("The page is writable.\n");
+   else
+       printf("it is not wriable.\n");*/
+
+   return st;
 }
 
 struct supp_table * create_stack_supp_table(void* virtual_addr){
@@ -93,7 +97,8 @@ struct supp_table * create_mmap_supp_table(struct file *file, off_t ofs,
                                       void *upage, uint32_t read_bytes,
                                       uint32_t zero_bytes, bool writable){
     ASSERT(read_bytes + zero_bytes == PGSIZE);
-    /*printf("Creating supp_page %x in thread: %s\n", upage, thread_current()->name);*/
+    /*printf("Creating supp_page %x in thread: %s\n", upage, thread_current()->name);
+    */
     struct supp_table* st;
     st =(struct supp_table*) malloc(sizeof(struct supp_table));
         

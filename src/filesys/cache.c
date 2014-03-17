@@ -42,10 +42,10 @@ struct cache_entry *cache_get(block_sector_t sector, bool dirty) {
         return result;
     }
     if (filesys_cache.cache_count < CACHE_MAXSIZE) {
-        result = malloc(sizeof(cache_entry));
+        result = malloc(sizeof(struct cache_entry));
         if (!result)
             PANIC("MALLOC FAILURE: not enough memory for cache");
-        list_push_back(&filesys_cache.cache_list, &result.elem);
+        list_push_back(&filesys_cache.cache_list, &result->elem);
         filesys_cache.cache_count++;
     }
     else 
@@ -55,7 +55,7 @@ struct cache_entry *cache_get(block_sector_t sector, bool dirty) {
         result->dirty = dirty;
         result->accessed = true;
         result->open_count = 1;
-        block_read(fs_device, sector, result->cach_block);
+        block_read(fs_device, sector, result->cache_block);
     }
     else {
         PANIC("EVICTION FAILURE: cache eviction undefined bug");
@@ -77,9 +77,9 @@ struct cache_entry *cache_evict(void) {
         else {
             if (result->dirty)
                 block_write(fs_device, result->sector, &result->cache_block);
-            filesys_cache.eviction_pointer = list_next(curr);
+            filesys_cache.evict_pointer = list_next(curr);
             if (curr == list_end(&filesys_cache.cache_list))
-                filesys_cache.eviction_pointer = NULL;
+                filesys_cache.evict_pointer = NULL;
             return result;
         }
         if (curr == list_end(&filesys_cache.cache_list))

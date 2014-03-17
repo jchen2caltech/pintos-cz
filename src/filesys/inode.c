@@ -65,6 +65,9 @@ void inode_init(void) {
 bool inode_create(block_sector_t sector, off_t length) {
     struct inode_disk *disk_inode = NULL;
     bool success = false;
+    size_t i = 0;
+    static block_sector_t* block_i[BLOCK_SECTOR_SIZE / 4];
+    block_sector_t* new;
 
     ASSERT(length >= 0);
 
@@ -77,7 +80,7 @@ bool inode_create(block_sector_t sector, off_t length) {
         size_t sectors = bytes_to_sectors(length);
         disk_inode->length = length;
         disk_inode->magic = INODE_MAGIC;
-        if (free_map_allocate(sectors, &disk_inode->start)) {
+        /*if (free_map_allocate(sectors, &disk_inode->start)) {
             block_write(fs_device, sector, disk_inode);
             if (sectors > 0) {
                 static char zeros[BLOCK_SECTOR_SIZE];
@@ -87,7 +90,14 @@ bool inode_create(block_sector_t sector, off_t length) {
                     block_write(fs_device, disk_inode->start + i, zeros);
             }
             success = true; 
+        }*/
+        if (free_map_allocate(1, &disk_inode->start)){
+            block_write(fs_device, sector, disk_inode);    
+            while (i < sectors) {
+                
+            }
         }
+        
         free(disk_inode);
     }
     return success;

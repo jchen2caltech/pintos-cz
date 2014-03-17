@@ -1,5 +1,6 @@
 #include <list.h>
 #include "devices/block.h"
+#include "devices/timer.h"
 #include "threads/synch.h"
 #include "filesys/filesys.h"
 #include "filesys/cache.h"
@@ -88,3 +89,45 @@ struct cache_entry *cache_evict(void) {
     return NULL;
 }
 
+void cache_write_to_disk(bool shut) {
+    struct list_elem *curr = list_begin(&filesys_cache.cache_list);
+    struct cache_entry *curr_cache;
+    struct list_elem *next;
+
+    lock_acquire(&filesys_cache.cache_lock);
+    while (curr && curr->next) {
+        next = list_next(curr);
+        curr_cache = list_entry(curr, struct cache_entry, elem);
+        if (curr_cache->dirty)
+            block_write(fs_device, curr_cache->sector, 
+                        &curr_cache->cache_block);
+        if (shut) {
+            list_remove(curr);
+            free(curr_cache);
+        }
+        curr = next;
+    }
+    lock_release(&filesys_cache.cache_lock);
+}
+
+void cache_write_background(void *aux) {
+    while (true) {
+        timer_sleep(CACHE_WRITE_TIME);
+        cache_write_to_disk(false);
+    }
+}
+
+void cache_read_ahead(void *aux) {
+    cache_get(*((block_sector_t *)aux), false);
+    free(aux);
+}
+
+void cache_read_create(block_sector_t toread) {
+    void *aux = malloc(sizeof(block_sector_t));
+    if (aux)
+        *aux = toread + 1;
+    else
+        PANIC("MALLOC FAILURE: not enough memory");
+    thread_create("cache read ahead", PRI_MIN, 
+                  cache_read_ahead, aux);
+}

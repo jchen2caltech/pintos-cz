@@ -32,7 +32,7 @@ struct cache_entry *cache_find(block_sector_t sector) {
 }
 
 struct cache_entry *cache_get(block_sector_t sector, bool dirty) {
-    cache_entry *result;
+    struct cache_entry *result;
 
     lock_acquire(&filesys_cache.cache_lock);
     if ((result = cache_find(sector)) != NULL) {
@@ -78,7 +78,7 @@ struct cache_entry *cache_evict(void) {
             if (result->dirty)
                 block_write(fs_device, result->sector, &result->cache_block);
             filesys_cache.eviction_pointer = list_next(curr);
-            if (curr == list_end(&filesys_cache.cache_list)
+            if (curr == list_end(&filesys_cache.cache_list))
                 filesys_cache.eviction_pointer = NULL;
             return result;
         }
@@ -128,7 +128,7 @@ void cache_read_ahead(void *aux) {
 void cache_read_create(block_sector_t toread) {
     void *aux = malloc(sizeof(block_sector_t));
     if (aux)
-        *aux = toread + 1;
+        *((uint32_t *)aux) = toread + 1;
     else
         PANIC("MALLOC FAILURE: not enough memory");
     thread_create("cache read ahead", PRI_MIN, 

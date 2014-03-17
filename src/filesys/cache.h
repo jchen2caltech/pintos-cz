@@ -1,11 +1,14 @@
 #ifndef FILESYSCACHE_H
 #define FILESYSCACHE_H
 
-#define CACHE_MAXSIZE 64
-
 #include <list.h>
 #include "devices/block.h"
 #include "threads/synch.h"
+#include "devices/timer.h"
+
+#define CACHE_MAXSIZE 64
+#define CACHE_WRITE_TIME 5*TIMER_FREQ
+
 
 struct cache_entry {
     block_sector_t sector;

@@ -20,7 +20,7 @@ struct cache_entry *cache_find(block_sector_t sector) {
     struct list_elem *curr = list_begin(&filesys_cache.cache_list);
     struct cache_entry *curr_cache;
 
-    while (curr) {
+    while (curr && curr->next) {
         curr_cache = list_entry(curr, struct cache_entry, elem);
         if (curr_cache->sector == sector) {
             curr_cache->accessed = true;
@@ -70,19 +70,20 @@ struct cache_entry *cache_evict(void) {
 
     if (!curr)
         curr = list_begin(&filesys_cache.cache_list);
-    while (curr) {
+    while (curr && curr->next) {
         result = list_entry(curr, struct cache_entry, elem);
         if (result->accessed)
             result->accessed = false;
         else {
             if (result->dirty)
                 block_write(fs_device, result->sector, &result->cache_block);
-            filesys_cache.evict_pointer = list_next(curr);
-            if (curr == list_end(&filesys_cache.cache_list))
+            if (curr->next == list_end(&filesys_cache.cache_list))
                 filesys_cache.evict_pointer = NULL;
+            else
+                filesys_cache.evict_pointer = list_next(curr);
             return result;
         }
-        if (curr == list_end(&filesys_cache.cache_list))
+        if (curr->next == list_end(&filesys_cache.cache_list))
             curr = list_begin(&filesys_cache.cache_list);
         else
             curr = list_next(curr);

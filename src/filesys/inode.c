@@ -202,7 +202,7 @@ off_t inode_read_at(struct inode *inode, void *buffer_, off_t size, off_t offset
             break;
 
         c = cache_get(sector_idx, false);
-        memcpy(buffer + bytes_read, &c->cache_block + sector_ofs, 
+        memcpy(buffer + bytes_read, (uint8_t *)&c->cache_block + sector_ofs, 
                chunk_size);
       
         /* Advance. */
@@ -240,7 +240,7 @@ off_t inode_write_at(struct inode *inode, const void *buffer_, off_t size, off_t
             break;
         
         c = cache_get(sector_idx, true);
-        memcpy(&c->cache_block + sector_ofs, buffer + bytes_written,
+        memcpy((uint8_t *)&c->cache_block + sector_ofs, buffer + bytes_written,
                chunk_size);
         c->dirty = true;
 

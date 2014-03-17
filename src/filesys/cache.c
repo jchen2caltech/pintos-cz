@@ -5,13 +5,14 @@
 #include "filesys/filesys.h"
 #include "filesys/cache.h"
 #include "threads/thread.h"
+#include "threads/malloc.h"
 
 void cache_init(void) {
     list_init(&filesys_cache.cache_list);
     lock_init(&filesys_cache.cache_lock);
     filesys_cache.cache_count = 0;
     filesys_cache.evict_pointer = NULL;
-    thread_create("cache write background", PRI_MIN, 
+    thread_create("cache write background", PRI_DEFAULT, 
                   cache_write_background, NULL);
 }
 
@@ -98,9 +99,11 @@ void cache_write_to_disk(bool shut) {
     while (curr && curr->next) {
         next = list_next(curr);
         curr_cache = list_entry(curr, struct cache_entry, elem);
-        if (curr_cache->dirty)
+        if (curr_cache->dirty) {
             block_write(fs_device, curr_cache->sector, 
                         &curr_cache->cache_block);
+            curr_cache->dirty = false;
+        }
         if (shut) {
             list_remove(curr);
             free(curr_cache);

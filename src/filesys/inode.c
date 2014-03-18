@@ -307,7 +307,9 @@ void inode_close(struct inode *inode) {
                 
             }
         }
-
+        else {
+            block_write(fs_device, inode->sector, &inode->data);
+        }
         free(inode); 
     }
 }
@@ -522,5 +524,6 @@ static off_t inode_extend(struct inode *inode, off_t length) {
             PANIC("not enough memory for file extension!");
         length -= chunk_size;
     }
+    block_write(fs_device, inode->sector, head);
     return new_length;
 }

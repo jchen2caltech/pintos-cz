@@ -174,13 +174,13 @@ bool inode_alloc_block(struct inode_disk* head, off_t length) {
         if (head->start == 0)
             head->start = index;
         else {
-            prev_index = inode_get_index_block(head, head->length);
+            prev_index = inode_get_index_block(head, head->length - 1);
             block_read(fs_device, prev_index, &prev_i);
             prev_i[MAX_BLOCKS] = index;
             block_write(fs_device, prev_index, &prev_i);
         }
     } else {
-        index = inode_get_index_block(head, head->length);
+        index = inode_get_index_block(head, head->length - 1);
         block_read(fs_device, index, &block_i);
         index_in_block = (sectors % MAX_BLOCKS);
     }
@@ -201,11 +201,11 @@ bool inode_alloc_block(struct inode_disk* head, off_t length) {
 
 block_sector_t inode_get_index_block(struct inode_disk* head, off_t length) {
     block_sector_t block_i[MAX_BLOCKS + 1];
-    size_t sectors = bytes_to_sectors(length);
+    size_t sectors = bytes_to_sectors(length + 1);
     block_sector_t ret;
     if (length <= 0)
         return head->start;
-    
+    //printf("sectors %d\n\n", sectors);
     ret = head->start;
     block_read(fs_device, head->start, &block_i);
     while (sectors > MAX_BLOCKS) {
@@ -466,18 +466,21 @@ off_t inode_write_at(struct inode *inode, const void *buffer_, off_t size, off_t
             if (chunk_size <= 0)
                 break;
             
-             //printf("writing to index block %d at index %d at offset %d\n", 
-             //       sector_idx, index_in_block, offset);
+            //printf("writing to index block %d at index %d at offset %d\n", 
+            //        sector_idx, index_in_block, offset);
             
             block_read(fs_device, sector_idx, &block_i);
             
+            
             //printf("Writing to %d\n", block_i[index_in_block]);
             
-            c = cache_get(block_i[index_in_block], false);
+            c = cache_get(block_i[index_in_block], true);
             memcpy((uint8_t *)&c->cache_block + sector_ofs, buffer + bytes_written,
                 chunk_size);
             c->dirty = true;
-            
+            //if (offset == 0 && bytes_written == 0) {
+              //  printf("%x %x %x %x written\n\n", c->cache_block[0], c->cache_block[1], c->cache_block[2], c->cache_block[3]);
+            //}
             /* Advance. */
             size -= chunk_size;
             offset += chunk_size;

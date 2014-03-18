@@ -147,6 +147,8 @@ bool inode_alloc_block(struct inode_disk* head, off_t length) {
     
     char zeros[BLOCK_SECTOR_SIZE];
     
+    memset(&zeros, 0, BLOCK_SECTOR_SIZE);
+    
     if (head->length % BLOCK_SECTOR_SIZE != 0) {
         left = BLOCK_SECTOR_SIZE - head->length % BLOCK_SECTOR_SIZE;
         if (length <= left) {
@@ -308,9 +310,7 @@ void inode_close(struct inode *inode) {
             }
             
         }
-        else {
-            block_write(fs_device, inode->sector, &inode->data);
-        }
+        block_write(fs_device, inode->sector, &inode->data);
         free(inode); 
     }
 }
@@ -418,8 +418,9 @@ off_t inode_write_at(struct inode *inode, const void *buffer_, off_t size, off_t
     if (inode->deny_write_cnt)
         return 0;
 
-    if (inode_length(inode) < offset + size)
+    if (inode_length(inode) < offset + size) {
         inode_extend(inode, offset + size);
+    }
 
     while (size > 0) {
         if (inode->data.type == NON_FILE_INODE_DISK) {

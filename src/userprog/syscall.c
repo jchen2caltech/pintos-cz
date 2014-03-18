@@ -376,10 +376,6 @@ void seek(uint32_t fd, unsigned position) {
     /* first find the file of this fd. */
     struct f_info* f = findfile(fd);
     
-    /* if position exceeds the file, then return the end of the file */
-    if ((int) position > filesize(fd))
-        position = (unsigned) filesize(fd);
-    
     f->pos = (off_t) position;
 
 }

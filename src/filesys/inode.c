@@ -306,8 +306,9 @@ void inode_close(struct inode *inode) {
                 }
                 
             }
+            
         }
-
+        printf("length is %d\n\n", inode->data.length);
         free(inode); 
     }
 }
@@ -507,20 +508,23 @@ off_t inode_length(const struct inode *inode) {
 
 static off_t inode_extend(struct inode *inode, off_t length) {
     static char zeros[BLOCK_SECTOR_SIZE];
-    ASSERT(inode && inode->data);
+    ASSERT(inode != NULL);
     struct inode_disk *head = &inode->data;
     off_t old_len = head->length;
-    uint32_t new_blocks = bytes_to_sectors(old_len + length) -
+    ASSERT(length > old_len);
+    uint32_t new_blocks = bytes_to_sectors(length) -
                           bytes_to_sectors(old_len);
-    off_t chunk_size, new_length;
+    off_t chunk_size, len_extended;
+    len_extended = old_len;
 
-    new_length = length + old_len;
-
+    length -= old_len;
     while (length > 0) {
         chunk_size = length >= BLOCK_SECTOR_SIZE ? BLOCK_SECTOR_SIZE : length;
         if (!inode_alloc_block(head, chunk_size))
             PANIC("not enough memory for file extension!");
         length -= chunk_size;
+        len_extended += chunk_size;
     }
-    return new_length;
+    printf("inode length now %d\n\n", inode_length(inode));
+    return len_extended;
 }

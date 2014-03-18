@@ -8,6 +8,7 @@
 
 #define FILE_INODE_DISK 0
 #define NON_FILE_INODE_DISK 1
+#define DIR_INODE_DISK 2
 
 /*! On-disk inode.
     Must be exactly BLOCK_SECTOR_SIZE bytes long. */

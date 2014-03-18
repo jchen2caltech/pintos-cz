@@ -308,7 +308,9 @@ void inode_close(struct inode *inode) {
             }
             
         }
-        printf("length is %d\n\n", inode->data.length);
+        else {
+            block_write(fs_device, inode->sector, &inode->data);
+        }
         free(inode); 
     }
 }
@@ -525,6 +527,6 @@ static off_t inode_extend(struct inode *inode, off_t length) {
         length -= chunk_size;
         len_extended += chunk_size;
     }
-    printf("inode length now %d\n\n", inode_length(inode));
+    block_write(fs_device, inode->sector, head);
     return len_extended;
 }

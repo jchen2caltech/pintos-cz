@@ -9,6 +9,8 @@
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
 #include "filesys/filesys.h"
+#include "filesys/directory.h"
+#include "filesys/inode.h"
 #include "filesys/file.h"
 #include "devices/input.h"
 #include "userprog/pagedir.h"
@@ -42,6 +44,12 @@ mapid_t mmap(uint32_t fd, void* addr);
 void munmap(mapid_t mapping);
 
 struct mmap_elem* find_mmap_elem(mapid_t mapid);
+
+bool _chdir(const char* dir);
+bool _mkdir(const char* dir);
+bool _readdir(uint32_t fd, char* name);
+bool _isdir(uint32_t fd);
+int _inumber(uint32_t fd);
 
 
 #endif /* userprog/syscall.h */

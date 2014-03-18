@@ -12,6 +12,7 @@
 #include <filesys/file.h>
 #include "synch.h"
 #include <hash.h>
+#include <filesys/directory.h>
 
 /*! States in a thread's life cycle. */
 enum thread_status {
@@ -137,6 +138,7 @@ struct thread {
     int64_t wakeup_time;                /*!< Wake up time of the thread */
 
     struct list locks;                  /*!< List of locks acquired by the thread */
+    struct dir * cur_dir;
 #ifdef USERPROG
     /*! Owned by userprog/process.c. */
     /**@{*/

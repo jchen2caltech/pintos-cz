@@ -162,6 +162,27 @@ static void syscall_handler(struct intr_frame *f) {
             t->syscall = false;
             t->esp = NULL;
             break;
+            
+        case SYS_ISDIR:
+            fd = (uint32_t) read4(f, 4);
+            f->eax = (uint32_t) _isdir(fd);
+            t->syscall = false;
+            t->esp = NULL;
+            break;
+            
+        case SYS_INUMBER:
+            fd = (uint32_t) read4(f,4);
+            f->eax = (uint32_t) _inumber(fd);
+            t->syscall = false;
+            t->esp = NULL;
+            break;
+            
+        case SYS_CHDIR:
+            f_name = (const char*) read4(f,4);
+            f->eax = (uint32_t) _chdir(f_name);
+            t->syscall = false;
+            t->esp = NULL;
+            break;
 
         default:
             exit(-1);
@@ -614,4 +635,62 @@ struct mmap_elem* find_mmap_elem(mapid_t mapid){
     }
     
     exit(-1);
+}
+
+int _inumber(uint32_t fd) {
+    struct f_info* f = findfile(fd);
+    return f->f->inode->sector;
+}
+
+bool _isdir(uint32_t fd){
+    struct f_info* f = findfile(fd);
+    return f->f->inode->data.type == DIR_INODE_DISK;
+}
+
+bool _chdir(const char* dir){
+    struct dir* cur_dir;
+    char name[strlen(dir) + 1];
+    unsigned i;
+    struct thread* t = thread_current();
+    struct inode* next_inode;
+    
+    if (!checkva(dir))
+       exit(-1);
+    
+    if (*dir == NULL || *dir == '\0')
+        return true;
+    
+    if (*dir == '/') {
+        cur_dir = dir_open_root();
+    } else if (t->cur_dir == NULL) {
+        cur_dir = dir_open_root();
+        t->cur_dir = dir_open_root();
+    } else {
+        cur_dir = dir_reopen(t->cur_dir);    
+    }
+    
+    while (*dir != '\0'){
+        i = 0;
+        while (*dir == '/')
+            ++dir;
+        while (*(dir + i) != '/' || *(dir + i) != '\0')
+            ++i;
+        memcpy(name, dir, i - 1);
+        name[i] = '\0';
+        
+        if (!dir_lookup(cur_dir, name, &next_inode) ||
+            next_inode->data.type != DIR_INODE_DISK) {
+            dir_close(cur_dir);
+            inode_close(next_inode);
+            return false;
+        }
+        
+        dir_close(cur_dir);
+        cur_dir = dir_open(next_inode);
+        
+        dir += i;
+    }
+    
+    t->cur_dir = cur_dir;
+    return true;
 }

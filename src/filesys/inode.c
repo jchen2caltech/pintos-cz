@@ -138,6 +138,52 @@ bool inode_file_create(block_sector_t sector, off_t length) {
     return success;
 }
 
+/*! Initializes an inode with LENGTH bytes of data and
+    writes the new inode to sector SECTOR on the file system
+    device.
+    Returns true if successful.
+    Returns false if memory or disk allocation fails. */
+bool inode_dir_create(block_sector_t sector, off_t length) {
+    struct inode_disk *disk_inode = NULL;
+    bool success = false;
+    size_t i = 0;
+    off_t block_write_length;
+
+    //printf("Creating file: %d with length %d\n\n", sector, length);
+    
+    ASSERT(length >= 0);
+
+    /* If this assertion fails, the inode structure is not exactly
+       one sector in size, and you should fix that. */
+    ASSERT(sizeof *disk_inode == BLOCK_SECTOR_SIZE);
+
+    disk_inode = calloc(1, sizeof *disk_inode);
+    if (disk_inode != NULL) {
+        size_t sectors = bytes_to_sectors(length);
+        disk_inode->length = 0;
+        disk_inode->magic = INODE_MAGIC;
+        disk_inode->start = 0;
+        disk_inode->type = DIR_INODE_DISK;
+        
+        while (length > 0) {
+            if (length >= BLOCK_SECTOR_SIZE) {
+                length -= BLOCK_SECTOR_SIZE;
+                block_write_length = BLOCK_SECTOR_SIZE;
+            } else {
+                block_write_length = length;
+                length = 0;
+            }
+            if (!inode_alloc_block(disk_inode, block_write_length))
+                return false;
+        }
+        block_write(fs_device, sector, disk_inode);
+        success = true;
+        free(disk_inode);
+        
+    }
+    return success;
+}
+
 bool inode_alloc_block(struct inode_disk* head, off_t length) {
     block_sector_t block_i[MAX_BLOCKS + 1], prev_i[MAX_BLOCKS + 1];
     block_sector_t index, prev_index, new;
@@ -286,7 +332,7 @@ void inode_close(struct inode *inode) {
                 free_map_release(inode->sector, 1);
                 free_map_release(inode->data.start,
                                 bytes_to_sectors(inode->data.length)); 
-            } else if (inode->data.type == FILE_INODE_DISK) {
+            } else {
                 sectors = bytes_to_sectors(inode_length(inode));
                 index_blocks = sectors / MAX_BLOCKS;
                 if (sectors % MAX_BLOCKS != 0)
@@ -308,9 +354,11 @@ void inode_close(struct inode *inode) {
                 }
                 
             }
+            free_map_release(inode->sector, 1);
             
+        } else {
+            block_write(fs_device, inode->sector, &inode->data);
         }
-        block_write(fs_device, inode->sector, &inode->data);
         free(inode); 
     }
 }
@@ -362,7 +410,7 @@ off_t inode_read_at(struct inode *inode, void *buffer_, off_t size, off_t offset
             size -= chunk_size;
             offset += chunk_size;
             bytes_read += chunk_size;
-        } else if (inode->data.type == FILE_INODE_DISK) {
+        } else  {
             sector_idx = inode_get_index_block(&inode->data, 
                                                offset);
             if (offset % (BLOCK_SECTOR_SIZE * MAX_BLOCKS) == 0)
@@ -445,7 +493,7 @@ off_t inode_write_at(struct inode *inode, const void *buffer_, off_t size, off_t
             size -= chunk_size;
             offset += chunk_size;
             bytes_written += chunk_size;
-        } else if (inode->data.type == FILE_INODE_DISK) {
+        } else {
             block_sector_t sector_idx = inode_get_index_block(&inode->data, offset);
             if (offset % (BLOCK_SECTOR_SIZE * MAX_BLOCKS) == 0)
                 index_in_block = 0;

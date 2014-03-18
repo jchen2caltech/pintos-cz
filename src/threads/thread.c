@@ -606,6 +606,7 @@ static void init_thread(struct thread *t, const char *name, int priority,
     list_init(&t->child_returnstats);
     if (t == initial_thread) {
         t->parent = NULL;
+        t->cur_dir = NULL;
     } else {
         t->parent = thread_current();
         trs = malloc(sizeof(struct thread_return_status));
@@ -618,6 +619,10 @@ static void init_thread(struct thread *t, const char *name, int priority,
         list_init(&t->f_lst);
         t->f_count = 2;
         t->fd_max = 1;
+        if (t->parent->cur_dir == NULL)
+            t->cur_dir = NULL;
+        else
+            t->cur_dir = dir_reopen(t->parent->cur_dir);
     }
     list_init(&t->child_processes);
     t->f_exe = NULL;

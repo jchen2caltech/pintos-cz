@@ -153,8 +153,11 @@ bool inode_alloc_block(struct inode_disk* head, off_t length) {
         if (length <= left) {
             head->length += length;
             return true;
-        } else
+        } else {
             length -= left;
+            head->length += left;
+        }
+
     }
         
     ASSERT((length <= BLOCK_SECTOR_SIZE) && (length > 0));
@@ -200,13 +203,13 @@ block_sector_t inode_get_index_block(struct inode_disk* head, off_t length) {
     size_t sectors = bytes_to_sectors(length);
     block_sector_t ret;
     if (length <= 0)
-        return 0;
+        return head->start;
     
     ret = head->start;
     block_read(fs_device, head->start, &block_i);
     while (sectors > MAX_BLOCKS) {
         ret = block_i[MAX_BLOCKS];
-        block_read(fs_device, block_i[MAX_BLOCKS], &block_i);
+        block_read(fs_device, ret, &block_i);
         sectors -= MAX_BLOCKS;
     }
     
@@ -298,11 +301,12 @@ off_t inode_read_at(struct inode *inode, void *buffer_, off_t size, off_t offset
     struct cache_entry *c;
     size_t index_in_block;
     block_sector_t block_i[MAX_BLOCKS + 1];
+    block_sector_t sector_idx;
 
     while (size > 0) {
         if (inode->data.type == NON_FILE_INODE_DISK) {
             /* Disk sector to read, starting byte offset within sector. */
-            block_sector_t sector_idx = byte_to_sector (inode, offset);
+            sector_idx = byte_to_sector (inode, offset);
             int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
             /* Bytes left in inode, bytes left in sector, lesser of the two. */
@@ -324,8 +328,9 @@ off_t inode_read_at(struct inode *inode, void *buffer_, off_t size, off_t offset
             offset += chunk_size;
             bytes_read += chunk_size;
         } else if (inode->data.type == FILE_INODE_DISK) {
-            block_sector_t sector_idx = inode_get_index_block(&inode->data, offset);
-            if (bytes_to_sectors(offset) % MAX_BLOCKS == 0)
+            sector_idx = inode_get_index_block(&inode->data, 
+                                               offset);
+            if (offset % (BLOCK_SECTOR_SIZE * MAX_BLOCKS) == 0)
                 index_in_block = 0;
             else
                 index_in_block = (bytes_to_sectors(offset) - 1) % MAX_BLOCKS;
@@ -344,7 +349,7 @@ off_t inode_read_at(struct inode *inode, void *buffer_, off_t size, off_t offset
             
             c = cache_get(block_i[index_in_block], false);
             memcpy(buffer + bytes_read, (uint8_t *)&c->cache_block + sector_ofs, 
-                chunk_size);
+                   chunk_size);
             
             /* Advance. */
             size -= chunk_size;
@@ -396,7 +401,7 @@ off_t inode_write_at(struct inode *inode, const void *buffer_, off_t size, off_t
             bytes_written += chunk_size;
         } else if (inode->data.type == FILE_INODE_DISK) {
             block_sector_t sector_idx = inode_get_index_block(&inode->data, offset);
-            if (bytes_to_sectors(offset) % MAX_BLOCKS == 0)
+            if (offset % (BLOCK_SECTOR_SIZE * MAX_BLOCKS) == 0)
                 index_in_block = 0;
             else
                 index_in_block = (bytes_to_sectors(offset) - 1) % MAX_BLOCKS;

@@ -21,7 +21,7 @@
 
 static void syscall_handler(struct intr_frame *);
 bool checkva(const void* va);
-bool decompose_dir(const char* dir, char* name, struct dir* par_dir);
+bool decompose_dir(const char* dir, char* ret_name, struct dir** par_dir);
 struct f_info *findfile(uint32_t fd);
 static uint32_t read4(struct intr_frame * f, int offset);
 static struct lock filesys_lock;
@@ -241,13 +241,21 @@ int wait(pid_t pid) {
 
 /*! Create a file */
 bool create(const char *f_name, unsigned initial_size) {
+    struct dir* cur_dir;
+    char name[15];
     /* Checks the validity of the given pointer */
     if (!checkva(f_name))
         exit(-1);
     
+    if (!decompose_dir(f_name, name, &cur_dir)){
+        return false;
+    }
+    if (cur_dir == NULL)
+        printf("nul godl\n");
+    
     /* Create the file, while locking the file system. */
     lock_acquire(&filesys_lock);
-    bool flag = filesys_create(f_name, (off_t) initial_size);
+    bool flag = filesys_dir_create(f_name, (off_t) initial_size, cur_dir);
     lock_release(&filesys_lock);
 
 
@@ -257,19 +265,26 @@ bool create(const char *f_name, unsigned initial_size) {
 
 /*! Remove a file */
 bool remove(const char *f_name) {
+    struct dir* cur_dir;
+    char name[15];
     /* Checks the validity of the given pointer */
     if (!checkva(f_name))
         exit(-1);
     
+    if (!decompose_dir(f_name, name, &cur_dir))
+        return false;
+    
     /* Remove the file, while locking the file system. */
     lock_acquire(&filesys_lock);
-    bool flag = filesys_remove(f_name);
+    bool flag = filesys_dir_remove(f_name, cur_dir);
     lock_release(&filesys_lock);
     return flag;
 }
 
 /*! Open a file */
 int open(const char *f_name) {
+    struct dir* cur_dir;
+    char name[15];
     struct thread *t;
     struct f_info *f;
     uint32_t fd;
@@ -278,9 +293,12 @@ int open(const char *f_name) {
     if (!checkva(f_name))
        exit(-1);
     
+    if (!decompose_dir(f_name, name, &cur_dir))
+        return false;
+    
     /* Open the file when locking the file system. */
     lock_acquire(&filesys_lock);
-    struct file* f_open = filesys_open(f_name);
+    struct file* f_open = filesys_dir_open(f_name, cur_dir);
     lock_release(&filesys_lock);
     
     if (f_open == NULL) {
@@ -664,12 +682,12 @@ bool _chdir(const char* dir){
     struct dir* cur_dir;
     char name[15];
 
-    if (!checkva(dir))
+    if (!checkva(dir)){
        exit(-1);
-    
-    if (!decompose_dir(dir, name, cur_dir))
+    }
+    if (!decompose_dir(dir, name, &cur_dir))
         return false;
-    
+
     if (!dir_lookup(cur_dir, name, &next_inode)) {
         dir_close(cur_dir);
         return false;
@@ -702,22 +720,20 @@ bool _mkdir(const char* dir) {
     if (!checkva(dir))
        exit(-1);
     //printf("done checking name\n");
-    if (!decompose_dir(dir, name, cur_dir)){
-        printf("Cannot decmp\n");
+    if (!decompose_dir(dir, name, &cur_dir)){
         return false;
     }
+    ASSERT(cur_dir != NULL);
     if (!free_map_allocate(1, &sector) || 
         !dir_create(sector, 0, dir_get_inode(cur_dir)->sector)){
         
         dir_close(cur_dir);
-        printf("cannot alloc or create\n");
         return false;
     }
     
     if (!dir_add(cur_dir, name, sector)){
         free_map_release(sector, 1);
         dir_close(cur_dir);
-        printf("cannot add\n");
         return false;
     }
     
@@ -728,15 +744,16 @@ bool _mkdir(const char* dir) {
 }
 
 
-bool decompose_dir(const char* dir, char* name, struct dir* par_dir){
+bool decompose_dir(const char* dir, char* ret_name, struct dir** par_dir){
     struct dir* cur_dir;
     struct inode* next_inode;
     unsigned i;
     struct thread* t = thread_current();
+    char name[15];
     
     if (*dir == NULL || *dir == '\0')
         return false;
-    
+
     if (*dir == '/') {
         cur_dir = dir_open_root();
     } else if (t->cur_dir == NULL) {
@@ -745,7 +762,7 @@ bool decompose_dir(const char* dir, char* name, struct dir* par_dir){
     } else {
         cur_dir = dir_reopen(t->cur_dir);    
     }
-    
+
     while (*dir != '\0'){
         i = 0;
         while (*dir == '/')
@@ -755,11 +772,11 @@ bool decompose_dir(const char* dir, char* name, struct dir* par_dir){
         }
         if (i > 15) {
             dir_close(cur_dir);
-            printf("going over 15\n");
             return false;
         }
-        
-        memcpy(name, dir, i - 1);
+
+        memcpy(name, dir, i);
+
         name[i] = '\0';
 
         
@@ -770,7 +787,7 @@ bool decompose_dir(const char* dir, char* name, struct dir* par_dir){
             dir_close(cur_dir);
             return false;
         }
-        
+
         dir_close(cur_dir);
         
         if  (next_inode->data.type != DIR_INODE_DISK) {
@@ -787,7 +804,10 @@ bool decompose_dir(const char* dir, char* name, struct dir* par_dir){
         
         dir += i;
     }
-    par_dir = cur_dir;
+    *par_dir = cur_dir;
+
+    strlcpy(ret_name, name, strlen(name) + 1);
+
     return true;
 }
 

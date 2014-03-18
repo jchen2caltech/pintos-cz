@@ -9,6 +9,9 @@
 #include "threads/malloc.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "filesys/inode.h"
+#include "filesys/directory.h"
+#include "filesys/free-map.h"
 #include "devices/input.h"
 #include "devices/shutdown.h"
 #include "userprog/pagedir.h"
@@ -18,6 +21,7 @@
 
 static void syscall_handler(struct intr_frame *);
 bool checkva(const void* va);
+bool decompose_dir(const char* dir, char* name, struct dir* par_dir);
 struct f_info *findfile(uint32_t fd);
 static uint32_t read4(struct intr_frame * f, int offset);
 static struct lock filesys_lock;
@@ -180,6 +184,13 @@ static void syscall_handler(struct intr_frame *f) {
         case SYS_CHDIR:
             f_name = (const char*) read4(f,4);
             f->eax = (uint32_t) _chdir(f_name);
+            t->syscall = false;
+            t->esp = NULL;
+            break;
+            
+        case SYS_MKDIR:
+            f_name = (const char*) read4(f,4);
+            f->eax = (uint32_t) _mkdir(f_name);
             t->syscall = false;
             t->esp = NULL;
             break;
@@ -648,17 +659,83 @@ bool _isdir(uint32_t fd){
 }
 
 bool _chdir(const char* dir){
-    struct dir* cur_dir;
-    char name[strlen(dir) + 1];
-    unsigned i;
     struct thread* t = thread_current();
     struct inode* next_inode;
-    
+    struct dir* cur_dir;
+    char name[15];
+
     if (!checkva(dir))
        exit(-1);
     
+    if (!decompose_dir(dir, name, cur_dir))
+        return false;
+    
+    if (!dir_lookup(cur_dir, name, &next_inode)) {
+        dir_close(cur_dir);
+        return false;
+    }
+        
+    dir_close(cur_dir);
+        
+    if  (next_inode->data.type != DIR_INODE_DISK) {
+        inode_close(next_inode);
+        return false;
+    }
+        
+    cur_dir = dir_open(next_inode);
+        
+    if (cur_dir == NULL) {
+        inode_close(next_inode);
+        return false;
+    }
+    
+    t->cur_dir = cur_dir;
+    return true;
+}
+
+bool _mkdir(const char* dir) {
+    struct inode* next_inode;
+    struct dir* cur_dir;
+    char name[15];
+    block_sector_t sector;
+    //printf("Checking name\n");
+    if (!checkva(dir))
+       exit(-1);
+    //printf("done checking name\n");
+    if (!decompose_dir(dir, name, cur_dir)){
+        printf("Cannot decmp\n");
+        return false;
+    }
+    if (!free_map_allocate(1, &sector) || 
+        !dir_create(sector, 0, dir_get_inode(cur_dir)->sector)){
+        
+        dir_close(cur_dir);
+        printf("cannot alloc or create\n");
+        return false;
+    }
+    
+    if (!dir_add(cur_dir, name, sector)){
+        free_map_release(sector, 1);
+        dir_close(cur_dir);
+        printf("cannot add\n");
+        return false;
+    }
+    
+    dir_close(cur_dir);
+    return true;
+    
+    
+}
+
+
+bool decompose_dir(const char* dir, char* name, struct dir* par_dir){
+    struct dir* cur_dir;
+    struct inode* next_inode;
+    unsigned i;
+    struct thread* t = thread_current();
+    
     if (*dir == NULL || *dir == '\0')
-        return true;
+        return false;
     
     if (*dir == '/') {
         cur_dir = dir_open_root();
@@ -673,24 +750,44 @@ bool _chdir(const char* dir){
         i = 0;
         while (*dir == '/')
             ++dir;
-        while (*(dir + i) != '/' || *(dir + i) != '\0')
+        while ((*(dir + i) != '/' && *(dir + i) != '\0') && (i <= 15)){
             ++i;
+        }
+        if (i > 15) {
+            dir_close(cur_dir);
+            printf("going over 15\n");
+            return false;
+        }
+        
         memcpy(name, dir, i - 1);
         name[i] = '\0';
+
         
-        if (!dir_lookup(cur_dir, name, &next_inode) ||
-            next_inode->data.type != DIR_INODE_DISK) {
+        if (*(dir + i) == '\0')
+            break;
+        
+        if (!dir_lookup(cur_dir, name, &next_inode)) {
             dir_close(cur_dir);
-            inode_close(next_inode);
             return false;
         }
         
         dir_close(cur_dir);
+        
+        if  (next_inode->data.type != DIR_INODE_DISK) {
+            inode_close(next_inode);
+            return false;
+        }
+        
         cur_dir = dir_open(next_inode);
+        
+        if (cur_dir == NULL) {
+            inode_close(next_inode);
+            return false;
+        }
         
         dir += i;
     }
-    
-    t->cur_dir = cur_dir;
+    par_dir = cur_dir;
     return true;
 }
+

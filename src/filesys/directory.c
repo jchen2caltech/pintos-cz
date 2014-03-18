@@ -21,15 +21,32 @@ struct dir_entry {
 
 /*! Creates a directory with space for ENTRY_CNT entries in the
     given SECTOR.  Returns true if successful, false on failure. */
-bool dir_create(block_sector_t sector, size_t entry_cnt) {
-    return inode_dir_create(sector, entry_cnt * sizeof(struct dir_entry));
+bool dir_create(block_sector_t sector, size_t entry_cnt, block_sector_t parent) {
+    struct dir* dir;
+    const char par[3] = "..";
+    const char cur[2] = ".";
+    
+    if (!inode_dir_create(sector, (entry_cnt + 2) * sizeof(struct dir_entry)))
+        return false;
+    
+    dir = dir_open(inode_open(sector));
+    if (!dir_add(dir, cur, sector) || !dir_add(dir, par, parent)) {
+        inode_remove(dir_get_inode(dir));
+        dir_close(dir);
+        return false;    
+    }
+    
+    return true;
+        
 }
 
 /*! Opens and returns the directory for the given INODE, of which
     it takes ownership.  Returns a null pointer on failure. */
 struct dir * dir_open(struct inode *inode) {
     struct dir *dir = calloc(1, sizeof(*dir));
-    if (inode != NULL && dir != NULL) {
+    if (inode != NULL && dir != NULL && 
+        inode->data.type == DIR_INODE_DISK) {
+        
         dir->inode = inode;
         dir->pos = 0;
         return dir;

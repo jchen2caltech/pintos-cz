@@ -12,14 +12,13 @@
 #define INODE_MAGIC 0x494e4f44
 #define MAX_BLOCKS (BLOCK_SECTOR_SIZE / (sizeof (block_sector_t)) - 1)
 
-
+static off_t inode_extend(struct inode *inode, off_t length);
 
 /*! Returns the number of sectors to allocate for an inode SIZE
     bytes long. */
 static inline size_t bytes_to_sectors(off_t size) {
     return DIV_ROUND_UP(size, BLOCK_SECTOR_SIZE);
 }
-
 
 
 /*! Returns the block device sector that contains byte offset POS
@@ -333,6 +332,9 @@ off_t inode_read_at(struct inode *inode, void *buffer_, off_t size, off_t offset
     block_sector_t sector_idx;
     off_t temp = size;
 
+    if (inode_length(inode) < offset + size)
+        return 0;
+
     while (size > 0) {
         if (inode->data.type == NON_FILE_INODE_DISK) {
             /* Disk sector to read, starting byte offset within sector. */
@@ -412,6 +414,9 @@ off_t inode_write_at(struct inode *inode, const void *buffer_, off_t size, off_t
     
     if (inode->deny_write_cnt)
         return 0;
+
+    if (inode_length(inode) < offset + size)
+        inode_extend(inode, offset + size);
 
     while (size > 0) {
         if (inode->data.type == NON_FILE_INODE_DISK) {
@@ -500,3 +505,22 @@ off_t inode_length(const struct inode *inode) {
     return inode->data.length;
 }
 
+static off_t inode_extend(struct inode *inode, off_t length) {
+    static char zeros[BLOCK_SECTOR_SIZE];
+    ASSERT(inode && inode->data);
+    struct inode_disk *head = &inode->data;
+    off_t old_len = head->length;
+    uint32_t new_blocks = bytes_to_sectors(old_len + length) -
+                          bytes_to_sectors(old_len);
+    off_t chunk_size, new_length;
+
+    new_length = length + old_len;
+
+    while (length > 0) {
+        chunk_size = length >= BLOCK_SECTOR_SIZE ? BLOCK_SECTOR_SIZE : length;
+        if (!inode_alloc_block(head, chunk_size))
+            PANIC("not enough memory for file extension!");
+        length -= chunk_size;
+    }
+    return new_length;
+}

@@ -80,7 +80,7 @@ bool inode_create(block_sector_t sector, off_t length) {
 }
 
 
-/*! Initializes an inode with LENGTH bytes of data and
+/*! Initializes a file inode with LENGTH bytes of data and
     writes the new inode to sector SECTOR on the file system
     device. This group of sector has type FILE_INODE_DISK.
     Returns true if successful.
@@ -109,8 +109,9 @@ bool inode_file_create(block_sector_t sector, off_t length) {
         disk_inode->start = 0;
         disk_inode->type = FILE_INODE_DISK;
         
-        /* */
+        /* If length > 0, then we need to allocate new sectors. */
         while (length > 0) {
+            /* Cut length sector-size by sector-size*/
             if (length >= BLOCK_SECTOR_SIZE) {
                 length -= BLOCK_SECTOR_SIZE;
                 block_write_length = BLOCK_SECTOR_SIZE;
@@ -118,20 +119,26 @@ bool inode_file_create(block_sector_t sector, off_t length) {
                 block_write_length = length;
                 length = 0;
             }
+            
+            /* Allocate a new sector. */
             if (!inode_alloc_block(disk_inode, block_write_length))
                 return false;
         }
+        
+        /* Write the disk_inode to disk sector. */
         block_write(fs_device, sector, disk_inode);
+        /*Set return flag to true.*/
         success = true;
+        /*Free the allocated disk_inode, as we have written it disk already.*/
         free(disk_inode);
         
     }
     return success;
 }
 
-/*! Initializes an inode with LENGTH bytes of data and
+/*! Initializes a directory inode with LENGTH bytes of data and
     writes the new inode to sector SECTOR on the file system
-    device.
+    device. This group of sector has type DIR_INODE_DISK.
     Returns true if successful.
     Returns false if memory or disk allocation fails. */
 bool inode_dir_create(block_sector_t sector, off_t length) {
@@ -140,7 +147,6 @@ bool inode_dir_create(block_sector_t sector, off_t length) {
     size_t i = 0;
     off_t block_write_length;
 
-    //printf("Creating file: %d with length %d\n\n", sector, length);
     
     ASSERT(length >= 0);
 
@@ -148,15 +154,23 @@ bool inode_dir_create(block_sector_t sector, off_t length) {
        one sector in size, and you should fix that. */
     ASSERT(sizeof *disk_inode == BLOCK_SECTOR_SIZE);
 
+    /* If this assertion fails, the inode structure is not exactly
+       one sector in size, and you should fix that. */
     disk_inode = calloc(1, sizeof *disk_inode);
     if (disk_inode != NULL) {
+        
+        /* Find out how many sectors this length needs. */
         size_t sectors = bytes_to_sectors(length);
+        
+         /* Initialize the fields of disk_inode. */
         disk_inode->length = 0;
         disk_inode->magic = INODE_MAGIC;
         disk_inode->start = 0;
         disk_inode->type = DIR_INODE_DISK;
         
+        /* If length > 0, then we need to allocate new sectors. */
         while (length > 0) {
+            /* Cut length sector-size by sector-size*/
             if (length >= BLOCK_SECTOR_SIZE) {
                 length -= BLOCK_SECTOR_SIZE;
                 block_write_length = BLOCK_SECTOR_SIZE;
@@ -164,36 +178,65 @@ bool inode_dir_create(block_sector_t sector, off_t length) {
                 block_write_length = length;
                 length = 0;
             }
+            
+            /* Allocate a new sector. */
             if (!inode_alloc_block(disk_inode, block_write_length))
                 return false;
         }
+        
+        /* Write the disk_inode to disk sector. */
         block_write(fs_device, sector, disk_inode);
+        /*Set return flag to true.*/
         success = true;
+        /*Free the allocated disk_inode, as we have written it disk already.*/
         free(disk_inode);
         
     }
     return success;
 }
 
+/*! Allocate a new sector to a file/directory inode. 
+ *  Return true if successful; False if not. */
+
 bool inode_alloc_block(struct inode_disk* head, off_t length) {
     block_sector_t block_i[MAX_BLOCKS + 1], prev_i[MAX_BLOCKS + 1];
     block_sector_t index, prev_index, new;
+    
+    /* Find out the number of sector this inode already has. */
     size_t sectors = bytes_to_sectors(head->length);
+    
+    /* index of the new allocated sector in its corresponding
+     * index sector. */ 
     size_t index_in_block;
+    
+    /* Stores the remaining unused bytes for the inode's last allocated 
+     * sector. */
     off_t left;
-    bool new_index_block = false;
+    
+    /* Flag for allocating a new starting index sector for an inode. */
     bool new_start_block = false;
     
+    /* Flag for allocating a new index block,
+     * but not the starting index block. */
+    bool new_index_block = false;
+
+    /* Zero-filled data to rewrite the newly allocated sector. */
     char zeros[BLOCK_SECTOR_SIZE];
-    
     memset(&zeros, 0, BLOCK_SECTOR_SIZE);
     
+    /* If there is unused bytes in the last allocated sector. */
     if (head->length % BLOCK_SECTOR_SIZE != 0) {
+        /* Find out the remaining bytes*/
         left = BLOCK_SECTOR_SIZE - head->length % BLOCK_SECTOR_SIZE;
         if (length <= left) {
+            /* If remaining bytes larger than the length, then we do not
+             * have to allocate another sector. Just update the length
+             * in inode. */
             head->length += length;
             return true;
         } else {
+            /* Otherwise we just need to allocate the difference between 
+             * the two. Update inode's lenghth with left. */
             length -= left;
             head->length += left;
         }
@@ -201,17 +244,23 @@ bool inode_alloc_block(struct inode_disk* head, off_t length) {
     }
         
     ASSERT((length <= BLOCK_SECTOR_SIZE) && (length > 0));
+    
     if ((sectors % MAX_BLOCKS) == 0) {
+        /* If we need to allocated a new index sector. */
         if (free_map_allocate(1, &index)) {
+            /* If we got a sector for this index block, then
+             * initialize by setting the last block_size_t as NULL.
+             * (which is the pointer to a future next index block) */
             block_i[MAX_BLOCKS] = 0;
-            index_in_block = 0;
             
+            /* Set the index in sector as 0. */
+            index_in_block = 0;
         } else {
             return false;    
         }
-        //printf("allocating a new index sector: %d with %d\n", index, MAX_BLOCKS);
         
         if (head->start == 0){
+            /* If we have not assigned a starting index to the inode yet. */
             head->start = index;
             new_start_block = true;
         }

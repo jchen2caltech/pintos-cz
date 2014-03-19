@@ -173,10 +173,12 @@ done:
 /*! Removes any entry for NAME in DIR.  Returns true if successful, false on
     failure, which occurs only if there is no file with the given NAME. */
 bool dir_remove(struct dir *dir, const char *name) {
-    struct dir_entry e;
+    struct dir_entry e, sub_e;
     struct inode *inode = NULL;
     bool success = false;
     off_t ofs;
+    struct dir* subdir;
+    const char tmp[NAME_MAX + 1];
 
     ASSERT(dir != NULL);
     ASSERT(name != NULL);
@@ -190,15 +192,35 @@ bool dir_remove(struct dir *dir, const char *name) {
     if (inode == NULL)
         goto done;
 
-    /* Erase directory entry. */
-    e.in_use = false;
-    if (inode_write_at(dir->inode, &e, sizeof(e), ofs) != sizeof(e))
-        goto done;
+    if (inode->data.type == FILE_INODE_DISK){
+        /* Erase directory entry. */
+        e.in_use = false;
+        if (inode_write_at(dir->inode, &e, sizeof(e), ofs) != sizeof(e))
+            goto done;
 
-    /* Remove inode. */
-    inode_remove(inode);
-    success = true;
+        /* Remove inode. */
+        inode_remove(inode);
+        success = true;
+    } else if (inode->data.type == DIR_INODE_DISK){
+        subdir = dir_open(inode);
+        if (dir_readdir(subdir, name)){
+            if (subdir != NULL)
+                free(subdir);
+             
+            goto done;
+        } else {
+            free(subdir);
 
+            /* Erase directory entry. */
+            e.in_use = false;
+            if (inode_write_at(dir->inode, &e, sizeof(e), ofs) != sizeof(e))
+                goto done;
+
+            /* Remove inode. */
+            inode_remove(inode);
+            success = true;
+        }
+    }
 done:
     inode_close(inode);
     return success;

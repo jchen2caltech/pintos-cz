@@ -278,10 +278,12 @@ bool remove(const char *f_name) {
     if (!checkva(f_name))
         exit(-1);
     
-    if (strcmp(".", f_name) == 0 || strcmp("..", f_name) == 0)
-        return false;
+    
 
     if (!decompose_dir(f_name, name, &cur_dir))
+        return false;
+    
+    if (strcmp(".", name) == 0 || strcmp("..", name) == 0)
         return false;
 
     /* Remove the file, while locking the file system. */
@@ -308,12 +310,15 @@ int open(const char *f_name) {
 
     /* Checks the validity of the given pointer */
     if (!checkva(f_name) || f_name[0] == '\0'){
-       exit(-1);
+       return -1;
     }
     
     if (!decompose_dir(f_name, name, &cur_dir)){
         return -1;
     }
+    
+    if (strcmp(".", name) == 0 || strcmp("..", name) == 0)
+        return false;
     
     /* Open the file when locking the file system. */
     lock_acquire(&filesys_lock);
@@ -835,6 +840,8 @@ bool decompose_dir(const char* dir, char* ret_name, struct dir** par_dir){
         cur_dir = dir_open_root();
         t->cur_dir = dir_open_root();
     } else {
+        if (dir_get_inode(t->cur_dir)->removed)
+            return false;
         cur_dir = dir_reopen(t->cur_dir);    
     }
 

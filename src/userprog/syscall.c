@@ -253,13 +253,11 @@ bool create(const char *f_name, unsigned initial_size) {
     char name[15];
     /* Checks the validity of the given pointer */
     if (!checkva(f_name))
-        exit(-1);
+        return false;
     
     if (!decompose_dir(f_name, name, &cur_dir)){
         return false;
     }
-    if (cur_dir == NULL)
-        printf("nul godl\n");
     
     /* Create the file, while locking the file system. */
     lock_acquire(&filesys_lock);
@@ -277,15 +275,17 @@ bool remove(const char *f_name) {
     char name[15];
     /* Checks the validity of the given pointer */
     if (!checkva(f_name))
-        exit(-1);
+        return false;
     
     if (!decompose_dir(f_name, name, &cur_dir))
         return false;
-    
+        
     /* Remove the file, while locking the file system. */
     lock_acquire(&filesys_lock);
     bool flag = filesys_dir_remove(f_name, cur_dir);
     lock_release(&filesys_lock);
+    
+    dir_close(cur_dir);
     return flag;
 }
 
@@ -737,16 +737,17 @@ bool _chdir(const char* dir){
     struct inode* next_inode;
     struct dir* cur_dir;
     char name[15];
-
+    printf("chdir: %s\n", dir);
     if (!checkva(dir)){
        exit(-1);
     }
     if (!decompose_dir(dir, name, &cur_dir))
         return false;
-
+    printf("decompsed to %s\n", name);
     if (strcmp(name, "\0") != 0){
         if (!dir_lookup(cur_dir, name, &next_inode)) {
             dir_close(cur_dir);
+            printf("not found\n");
             return false;
         }
             
@@ -754,6 +755,7 @@ bool _chdir(const char* dir){
             
         if  (next_inode->data.type != DIR_INODE_DISK) {
             inode_close(next_inode);
+            printf("not dir\n");
             return false;
         }
             
@@ -761,6 +763,7 @@ bool _chdir(const char* dir){
             
         if (cur_dir == NULL) {
             inode_close(next_inode);
+            printf("cur_dir cannot be opened");
             return false;
         }
         
@@ -770,7 +773,9 @@ bool _chdir(const char* dir){
         return false;
     }
     
-    t->cur_dir = cur_dir;
+    dir_close(t->cur_dir);
+    t->cur_dir = dir_reopen(cur_dir);
+    dir_close(cur_dir);
     
     return true;
 }
@@ -780,6 +785,8 @@ bool _mkdir(const char* dir) {
     struct dir* cur_dir;
     char name[15];
     block_sector_t sector;
+    printf("mkdir: %s\n", dir);
+    
     //printf("Checking name\n");
     if (!checkva(dir))
        exit(-1);
@@ -787,6 +794,7 @@ bool _mkdir(const char* dir) {
     if (!decompose_dir(dir, name, &cur_dir)){
         return false;
     }
+    printf("decompsed to %s\n", name);
     ASSERT(cur_dir != NULL);
     if (!free_map_allocate(1, &sector) || 
         !dir_create(sector, 0, dir_get_inode(cur_dir)->sector)){
@@ -794,7 +802,7 @@ bool _mkdir(const char* dir) {
         dir_close(cur_dir);
         return false;
     }
-    
+    printf("assigned to sector %d\n", sector);
     if (!dir_add(cur_dir, name, sector)){
         free_map_release(sector, 1);
         dir_close(cur_dir);
@@ -802,6 +810,7 @@ bool _mkdir(const char* dir) {
     }
     
     dir_close(cur_dir);
+    printf("mk success\n");
     return true;
     
     

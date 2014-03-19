@@ -41,7 +41,6 @@ static struct cache_entry *cache_readin(block_sector_t sector, bool dirty) {
          
         result->dirty |= dirty;
         result->open_count++;
-        lock_release(&filesys_cache.cache_lock);
         return result;
     }
     if (filesys_cache.cache_count < CACHE_MAXSIZE) {

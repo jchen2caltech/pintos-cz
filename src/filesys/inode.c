@@ -82,7 +82,7 @@ bool inode_create(block_sector_t sector, off_t length) {
 
 /*! Initializes an inode with LENGTH bytes of data and
     writes the new inode to sector SECTOR on the file system
-    device.
+    device. This group of sector has type FILE_INODE_DISK.
     Returns true if successful.
     Returns false if memory or disk allocation fails. */
 bool inode_file_create(block_sector_t sector, off_t length) {
@@ -90,8 +90,6 @@ bool inode_file_create(block_sector_t sector, off_t length) {
     bool success = false;
     size_t i = 0;
     off_t block_write_length;
-
-    //printf("Creating file: %d with length %d\n\n", sector, length);
     
     ASSERT(length >= 0);
 
@@ -99,14 +97,19 @@ bool inode_file_create(block_sector_t sector, off_t length) {
        one sector in size, and you should fix that. */
     ASSERT(sizeof *disk_inode == BLOCK_SECTOR_SIZE);
 
+    /* Allocate a new disk_inode for this file. */
     disk_inode = calloc(1, sizeof *disk_inode);
     if (disk_inode != NULL) {
+        /* Find out how many sectors this length needs. */
         size_t sectors = bytes_to_sectors(length);
+        
+        /* Initialize the fields of disk_inode. */
         disk_inode->length = 0;
         disk_inode->magic = INODE_MAGIC;
         disk_inode->start = 0;
         disk_inode->type = FILE_INODE_DISK;
         
+        /* */
         while (length > 0) {
             if (length >= BLOCK_SECTOR_SIZE) {
                 length -= BLOCK_SECTOR_SIZE;

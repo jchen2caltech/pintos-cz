@@ -74,7 +74,6 @@ struct cache_entry *cache_get(block_sector_t sector, bool dirty) {
     lock_acquire(&filesys_cache.cache_lock);
     result = cache_readin(sector, dirty);
     lock_release(&filesys_cache.cache_lock);
-    cache_read_create(sector);
     return result;
 }
 

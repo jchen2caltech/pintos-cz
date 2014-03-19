@@ -294,7 +294,7 @@ int open(const char *f_name) {
     struct inode* inode;
 
     /* Checks the validity of the given pointer */
-    if (!checkva(f_name))
+    if (!checkva(f_name) || f_name[0] == '\0')
        exit(-1);
     
     if (!decompose_dir(f_name, name, &cur_dir))
@@ -302,24 +302,38 @@ int open(const char *f_name) {
     
     /* Open the file when locking the file system. */
     lock_acquire(&filesys_lock);
-    if (!dir_lookup(cur_dir, name, &inode)){
+    
+    if (strcmp(name, "\0") != 0){
+        if (!dir_lookup(cur_dir, name, &inode)){
+            lock_release(&filesys_lock);
+            return -1;
+        }
+        isdir = (inode->data.type == DIR_INODE_DISK);
+        if (isdir)
+            d_open = dir_open(inode);
+        else
+            f_open = file_open(inode);
         lock_release(&filesys_lock);
-        return -1;
+    } else {
+        isdir = true;
+        d_open = dir_reopen(inode);
     }
-    isdir = (inode->data.type == DIR_INODE_DISK);
-    if (isdir)
-        d_open = dir_open(inode);
-    else
-        f_open = file_open(inode);
-    lock_release(&filesys_lock);
     
     if (f_open == NULL && dir_open == NULL) {
+        inode_close(inode);
         /* If file open failed, then exit with error. */
         return -1;
     } else {
         t = thread_current();
-        if (t->f_count > 127)
+        if (t->f_count > 127){
+            inode_close(inode);
+            if (isdir){
+                file_close(f_open);    
+            } else {
+                dir_close(d_open);
+            }
             exit(-1);
+        }
         
         /* Set up new f_info */
         f = (struct f_info*) malloc(sizeof(struct f_info));
@@ -340,7 +354,7 @@ int open(const char *f_name) {
         ++(t->f_count);
         lock_release(&filesys_lock);
     }
-    
+    inode_close(inode);
     return fd;
 
 }

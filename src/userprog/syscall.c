@@ -295,16 +295,31 @@ bool remove(const char *f_name) {
     return flag;
 }
 
-/*! Open a file */
+/*! Open a file or an directory */
 int open(const char *f_name) {
+    /* The parent directory of the opening file or directory. */
     struct dir* cur_dir;
+    
+    /* Name of the file or the directory. */
     char name[15];
+    
+    /* CUrrent thread. */
     struct thread *t;
+    
+    /* file info struct for creating fd to this thread. */
     struct f_info *f;
+    
+    /* dir struct or file struct depending what we are opening */
     struct dir* d_open;
     struct file* f_open;
+    
+    /* The flag for whether we are opening a directory. */
     bool isdir;
+    
+    /* fd number assigned to this file / directory */
     uint32_t fd;
+    
+    /* Inode of the file / dir we are opening. */
     struct inode* inode;
 
     /* Checks the validity of the given pointer */
@@ -312,30 +327,37 @@ int open(const char *f_name) {
        return -1;
     }
     
+    /* Decomposes a path to the final file / dir name
+     * and its corresponding parent dir. */
     if (!decompose_dir(f_name, name, &cur_dir)){
         return -1;
     }
-    
-    /*if (strcmp(".", name) == 0 || strcmp("..", name) == 0)
-        return false;*/
     
     /* Open the file when locking the file system. */
     lock_acquire(&filesys_lock);
     
     if (strcmp(name, "\0") != 0){
+        /* If file / dir name is not empty, then look for it in its parent 
+         * directory. */
         if (!dir_lookup(cur_dir, name, &inode)){
             lock_release(&filesys_lock);
             return -1;
         }
+        
+        /* Decide whether the inode is a directory or a file. */
         isdir = (inode->data.type == DIR_INODE_DISK);
-        //printf("setting isdir: %d", isdir);
+        
+        /* Open the file / dir */
         if (isdir)
             d_open = dir_open(inode);
         else
             f_open = file_open(inode);
         lock_release(&filesys_lock);
     } else {
+        /* Since we decomposed the entire path to a diretory
+         * then we must be opening a directory. */
         isdir = true;
+        /* Reopen the directory, to store in f_info */
         d_open = dir_reopen(cur_dir);
     }
     
@@ -344,6 +366,7 @@ int open(const char *f_name) {
         /* If file open failed, then exit with error. */
         return -1;
     } else {
+        /* Assign fd to the file / dir */
         t = thread_current();
         if (t->f_count > 127){
             if (isdir){
@@ -363,6 +386,7 @@ int open(const char *f_name) {
             f->f = f_open;
         f->pos = 0;
         
+        /* Update the process's fd info */
         lock_acquire(&filesys_lock);
         fd = (++(t->fd_max));
         f->fd = fd;
@@ -421,6 +445,7 @@ int read(uint32_t fd, void *buffer, unsigned size) {
         /* Otherwise, first find the file of this fd. */
         struct f_info* f = findfile(fd);
         
+        /* We should read a dir like a file. */
         if (f->isdir)
             exit(-1);
         
@@ -457,6 +482,8 @@ int write(uint32_t fd, const void *buffer, unsigned size) {
     } else {
         /* Otherwise, first find the file of this fd. */
         struct f_info* f = findfile(fd);
+        
+        /* We should write to a directory just like a file. */
         if (f->isdir)
             exit(-1);
         
@@ -730,59 +757,90 @@ struct mmap_elem* find_mmap_elem(mapid_t mapid){
     exit(-1);
 }
 
+/*! Returns the sector number of the inode associated with fd */
 int _inumber(uint32_t fd) {
+    /* First get the f_info*/
     struct f_info* f = findfile(fd);
+    
+    /* Get the sector number*/
     if (f->isdir)
         return dir_get_inode(f->d)->sector;
     else
         return f->f->inode->sector;
 }
 
+/*! Returns true if fd represents a directory, false if it represents an
+ *  ordinary file. */ 
 bool _isdir(uint32_t fd){
+    /* First get the f_info*/
     struct f_info* f = findfile(fd);
 
     return f->isdir;
 }
 
+/*! Changes the working directory of the current process (i.e. 
+ * thread->cur_dir). Returns true if the operation is successfull
+ * and false otherwise. */
 bool _chdir(const char* dir){
+    /* The current process*/
     struct thread* t = thread_current();
+    
+    /* inode for the new directory*/
     struct inode* next_inode;
+    
+    /* new directory struct*/
     struct dir* cur_dir;
+    
+    /* name of the directory*/
     char name[15];
+    
+    
+    /* Check validity of the pointer*/
     if (!checkva(dir)){
        exit(-1);
     }
    
-    //printf("changing dir to %s\n\n", dir); 
+   /* Decompose the path to a final name and parent directory. */
     if (!decompose_dir(dir, name, &cur_dir))
         return false;
+    
     if (strcmp(name, "\0") != 0){
+        
+        /* If name is not empty, then we simply look for the name
+         * under the parent directory cur_dir, and get the inode
+         * of this destination directory. */
         if (!dir_lookup(cur_dir, name, &next_inode)) {
-            //printf("dir not found %s\n\n", name);
             dir_close(cur_dir);
             return false;
         }
-        //printf("dir found\n\n");    
+        
+        /* Close the parent directory, as we do not need it any more. */
         dir_close(cur_dir);
-            
+        
+        /* Check that the inode we are opening is a directory. */
         if  (next_inode->data.type != DIR_INODE_DISK) {
             inode_close(next_inode);
             return false;
         }
-        //printf("is a dir\n\n");
-        cur_dir = dir_open(next_inode);
         
+        /* Open up the inode to directory struct*/
+        cur_dir = dir_open(next_inode);
         if (cur_dir == NULL) {
             inode_close(next_inode);
             return false;
         }
-        //printf("open succeed\n\n");
         
     } else if (dir[strlen(dir)] != '/'){
+        /* If the name is not empty, and the give path does not end with "/" 
+         * then this path is an invalid directory path. 
+         * Note if the path is in fact valid and the name we get is empty,
+         * then the distiniation directory has been already opened in 
+         * cur_dir. */
         dir_close(cur_dir);
         return false;
     }
     
+    /* Update the current process's working directory */
     dir_close(t->cur_dir);
     t->cur_dir = dir_reopen(cur_dir);
     dir_close(cur_dir);
@@ -790,26 +848,42 @@ bool _chdir(const char* dir){
     return true;
 }
 
+/*! Creates the directory named dir. Return true if successful, but false
+ * if dir already exists or if any directory name in dir, besides the last
+ * one does not exist. */
 bool _mkdir(const char* dir) {
+    /* Inode for the new directory created. */
     struct inode* next_inode;
+    
+    /* Parent directory. */
     struct dir* cur_dir;
+    
+    /* Name of the directory. */
     char name[15];
+    
+    /* Sector number allocated to the new directory. */
     block_sector_t sector;
     
-    //printf("Checking name\n");
+    /* Check the validity of the pointer*/
     if (!checkva(dir))
        exit(-1);
-    //printf("done checking name\n");
+    
+    /* The compose the path to a final dir name and its parent directory. */
     if (!decompose_dir(dir, name, &cur_dir)){
         return false;
     }
     ASSERT(cur_dir != NULL);
+    
+    /* Allocate a new sector for this new directory;
+     * Create a new directory */
     if (!free_map_allocate(1, &sector) || 
         !dir_create(sector, 0, dir_get_inode(cur_dir)->sector)){
         
         dir_close(cur_dir);
         return false;
     }
+    
+    /* Add the new directory to its parent directory. */
     if (!dir_add(cur_dir, name, sector)){
         free_map_release(sector, 1);
         dir_close(cur_dir);
@@ -818,64 +892,98 @@ bool _mkdir(const char* dir) {
     
     dir_close(cur_dir);
     return true;
-    
-    
 }
 
-
+/* Decomposes the given path (dir) to a final file or directory name and
+ * its parent directory. Write the name to ret_name, and the parent directory
+ * struct to par_dir. Returns true if the decomposition is successfull, i.e.
+ * successfully decomposed the final name, and open all the directories in 
+ * path successfully. */
 bool decompose_dir(const char* dir, char* ret_name, struct dir** par_dir){
+    /* parent directory*/
     struct dir* cur_dir;
+    
+    /* inode for iteration*/
     struct inode* next_inode;
+    
+    /* iterator for the path string*/
     unsigned i;
+    
+    /* Current process*/
     struct thread* t = thread_current();
+    
+    /* Final name of the file or the directory*/
     char name[15];
     
+    /* Check that give path is not empty*/
     if (*dir == NULL || dir[0] == '\0')
         return false;
 
     if (dir[0] == '/') {
+        /* If give an absolute path, then first set cur_dir as root. */
         cur_dir = dir_open_root();
     } else if (t->cur_dir == NULL) {
+        /* Given path is relative. However, as the process's cur_dir is
+         * NULL, which is equivelant to the root directory in our 
+         * implemtation. Also set update proccess's cur_dir to root. */
         cur_dir = dir_open_root();
         t->cur_dir = dir_open_root();
     } else {
+        /* Give path is also relative. And set cur_dir same as the process's 
+         * working director. */
         if (dir_get_inode(t->cur_dir)->removed)
+            /* If the working directory has been removed, then return false 
+             * right away. */
             return false;
         cur_dir = dir_reopen(t->cur_dir);    
     }
 
+    /* Iterate the path with dir as iterator until the null terminator. */
     while (*dir != '\0'){
+        /* Reset the index iterator. for extract next subdirectory name. */
         i = 0;
+        
+        /*Skip the directory symbol*/
         while (*dir == '/')
             ++dir;
+        
+        /* Increment i until the directory symbol or null terminator*/
         while ((*(dir + i) != '/' && *(dir + i) != '\0') && (i <= 15)){
             ++i;
         }
+        
+        /* Enforces NAME_MAX length to all directories*/
         if (i > 15) {
             dir_close(cur_dir);
             return false;
         }
 
+        /* Copy this directory name to name*/
         memcpy(name, dir, i);
-
         name[i] = '\0';
 
-        
+        /* If this is the last name, then we got our final dir / file name,
+         * i.e. finished decomposition of path. */
         if (*(dir + i) == '\0')
             break;
         
+        /* Look up the file / dir from the parent directory cur_dir. */
         if (!dir_lookup(cur_dir, name, &next_inode)) {
             dir_close(cur_dir);
             return false;
         }
-
+        
+        /* Close the current parent directory, as we have found the next 
+         * one.*/
         dir_close(cur_dir);
         
+        /* Makes sure that we are always opening a directory. */
         if  (next_inode->data.type != DIR_INODE_DISK) {
             inode_close(next_inode);
             return false;
         }
         
+        /* Open up the next directory in path. */
         cur_dir = dir_open(next_inode);
         
         if (cur_dir == NULL) {
@@ -883,23 +991,35 @@ bool decompose_dir(const char* dir, char* ret_name, struct dir** par_dir){
             return false;
         }
         
+        /* Advance. */
         dir += i;
     }
+    
+    /* Set the parent directory as cur_dir*/
     *par_dir = cur_dir;
-
+    
+    /*Copy the final name ret_name*/
     strlcpy(ret_name, name, strlen(name) + 1);
 
     return true;
 }
 
+/*! Reads a directory entry from file descriptor fd. If successful, stores,
+ * the null-terminated file name in name. If no entries are left in 
+ * directory, returns false. */
 bool _readdir(uint32_t fd, char* name){
+    /* Check for the validity of the pointer. */
     if (!checkva(name))
         return false;
     
+    /* Get the f_info struct of this fd*/
     struct f_info* f = findfile(fd);
     
+    /*Check that we are opening a directory. */
     if (!f->isdir)
         return false;
+    
+    /* Use the defined dir_readir to finish the function. */
     return dir_readdir(f->d, name);
 }
 

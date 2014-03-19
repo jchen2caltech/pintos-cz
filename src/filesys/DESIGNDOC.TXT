@@ -80,8 +80,11 @@ from reading all zeros.
 >> processes writing to a file cannot prevent another process forever
 >> from reading the file.
 
-
-
+Although cache_get() requires holding the cache_lock, cache_get() is
+relatively fast. So one accessor, whether a reader or a writer, cannot
+block cache access forever. File-read and file-write operations do
+not block each other at all, other than the cache_get() synchronization,
+so fairness is provided. 
 
 ---- RATIONALE ----
 
@@ -130,7 +133,8 @@ token-specified directory, until the path is finished.
 >> should succeed, as should only one of two simultaneous attempts to
 >> create a file with the same name, and so on.
 
-Directory operations requires holding the directory's 
+Directory operations requires holding the filesys_lock, thus
+removing from or adding to a directory can only happen once at a time. 
 
 >> B5: Does your implementation allow a directory to be removed if it
 >> is open by a process or if it is in use as a process's current

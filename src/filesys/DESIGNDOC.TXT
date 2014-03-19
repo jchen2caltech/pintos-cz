@@ -176,7 +176,7 @@ cache-list to be checked for eviction next time.
 At the start of the eviction, start at the evict_pointer.
 Circularly go through the list of cache, with the following rules:
 1. If a cache's accessed bit is set, skip it and reset the bit. 
-2. If a cache's accessed bit is clear, enter:
+2. If a cache's accessed bit is clear and its open_count is 0:
     1. Write the cache back to its corresponding sector if the
        dirty bit is set. 
     2. Select this cache for eviction (does not free anything).
@@ -195,15 +195,13 @@ cache_read_create() creates a ghost thread that reads the "next" sector in
 the background. Every time cache_get() is called, it calls cache_read_create()
 at the end to asynchronously read in the next sector. 
 
-
 ---- SYNCHRONIZATION ----
 
 >> C5: When one process is actively reading or writing data in a
 >> buffer cache block, how are other processes prevented from evicting
 >> that block?
 
-Reading/Writing in buffer cache lock requires acquiring the cache_lock.
-Thus, when a buffer block is being accessed, 
+The cache 
 
 >> C6: During the eviction of a block from the cache, how are other
 >> processes prevented from attempting to access the block?

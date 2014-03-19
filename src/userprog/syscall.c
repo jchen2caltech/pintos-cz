@@ -252,15 +252,12 @@ bool create(const char *f_name, unsigned initial_size) {
     struct dir* cur_dir;
     char name[15];
     /* Checks the validity of the given pointer */
-    if (!checkva(f_name))
-        return false;
+    if (!checkva(f_name) || !(*f_name))
+        exit(-1);
     
     if (!decompose_dir(f_name, name, &cur_dir)){
         return false;
     }
-
-    if (!(*f_name))
-        return false;
     
     /* Create the file, while locking the file system. */
     lock_acquire(&filesys_lock);
@@ -279,7 +276,7 @@ bool remove(const char *f_name) {
     /* Checks the validity of the given pointer */
     //printf("going to remove file %s\n\n", f_name);
     if (!checkva(f_name))
-        return false;
+        exit(-1);
     
     if (strcmp(".", f_name) == 0 || strcmp("..", f_name) == 0)
         return false;
@@ -311,7 +308,7 @@ int open(const char *f_name) {
 
     /* Checks the validity of the given pointer */
     if (!checkva(f_name) || f_name[0] == '\0'){
-       return -1;
+       exit(-1);
     }
     
     if (!decompose_dir(f_name, name, &cur_dir)){
@@ -559,6 +556,9 @@ mapid_t mmap(uint32_t fd, void* addr){
     struct supp_table* st;
     struct thread* t = thread_current();
     
+    if (!checkva(addr))
+        exit(-1);
+
     /* Check for the invalid conditions:
      * fd is standard io; file size of the given fd is 0; give user address
      * is not valie; given address is not page aligned; given address is 0.
@@ -566,7 +566,6 @@ mapid_t mmap(uint32_t fd, void* addr){
     if (fd == STDIN_FILENO ||
         fd == STDOUT_FILENO ||
         filesize(fd) == 0 ||
-        (!checkva(addr)) ||
         pg_ofs(addr) != 0 ||
         addr == 0) {
             return MAP_FAIL;

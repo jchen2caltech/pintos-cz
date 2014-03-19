@@ -208,10 +208,13 @@ done:
     true if successful, false if the directory contains no more entries. */
 bool dir_readdir(struct dir *dir, char name[NAME_MAX + 1]) {
     struct dir_entry e;
+    char par[3] = "..";
+    char cur[2] = ".";
 
     while (inode_read_at(dir->inode, &e, sizeof(e), dir->pos) == sizeof(e)) {
         dir->pos += sizeof(e);
-        if (e.in_use) {
+        if (e.in_use && (strcmp(e.name, par) != 0) 
+                     && (strcmp(e.name, cur) != 0)) {
             strlcpy(name, e.name, NAME_MAX + 1);
             return true;
         } 

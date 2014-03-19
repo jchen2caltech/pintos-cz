@@ -287,7 +287,11 @@ int open(const char *f_name) {
     char name[15];
     struct thread *t;
     struct f_info *f;
+    struct dir* d_open;
+    struct file* f_open;
+    bool isdir;
     uint32_t fd;
+    struct inode* inode;
 
     /* Checks the validity of the given pointer */
     if (!checkva(f_name))
@@ -298,10 +302,18 @@ int open(const char *f_name) {
     
     /* Open the file when locking the file system. */
     lock_acquire(&filesys_lock);
-    struct file* f_open = filesys_dir_open(f_name, cur_dir);
+    if (!dir_lookup(cur_dir, name, &inode)){
+        lock_release(&filesys_lock);
+        return -1;
+    }
+    isdir = (inode->data.type == DIR_INODE_DISK);
+    if (isdir)
+        d_open = dir_open(inode);
+    else
+        f_open = file_open(inode);
     lock_release(&filesys_lock);
     
-    if (f_open == NULL) {
+    if (f_open == NULL && dir_open == NULL) {
         /* If file open failed, then exit with error. */
         return -1;
     } else {
@@ -311,7 +323,11 @@ int open(const char *f_name) {
         
         /* Set up new f_info */
         f = (struct f_info*) malloc(sizeof(struct f_info));
-        f->f = f_open;
+        f->isdir = isdir;
+        if (isdir)
+            f->d = d_open;
+        else
+            f->f = f_open;
         f->pos = 0;
         
         lock_acquire(&filesys_lock);
@@ -372,6 +388,10 @@ int read(uint32_t fd, void *buffer, unsigned size) {
     } else {
         /* Otherwise, first find the file of this fd. */
         struct f_info* f = findfile(fd);
+        
+        if (f->isdir)
+            exit(-1);
+        
         struct file* fin = f->f;
         off_t pos = f->pos;
         
@@ -405,6 +425,9 @@ int write(uint32_t fd, const void *buffer, unsigned size) {
     } else {
         /* Otherwise, first find the file of this fd. */
         struct f_info* f = findfile(fd);
+        if (f->isdir)
+            exit(-1);
+        
         struct file* fout = f->f;
         off_t pos = f->pos;
         
@@ -447,7 +470,12 @@ void close(uint32_t fd) {
      * free this f_info. Update f_count accordingly. */
     
     lock_acquire(&filesys_lock);
-    file_close(f->f);
+    
+    if (f->isdir)
+        dir_close(f->d);
+    else
+        file_close(f->f);
+    
     list_remove(&f->elem);
     free(f);
     struct thread* t = thread_current();
@@ -536,6 +564,8 @@ mapid_t mmap(uint32_t fd, void* addr){
     
     /* Reopen the file according to the file descriptor. */
     f = findfile(fd);
+    if (f->isdir)
+        return MAP_FAIL;
     lock_acquire(&filesys_lock);
     file = file_reopen(f->f);
     lock_release(&filesys_lock);
@@ -809,5 +839,16 @@ bool decompose_dir(const char* dir, char* ret_name, struct dir** par_dir){
     strlcpy(ret_name, name, strlen(name) + 1);
 
     return true;
+}
+
+bool _readdir(uint32_t fd, char* name){
+    if (!checkva(name))
+        return false;
+    
+    struct f_info* f = findfile(fd);
+    
+    if (!f->isdir)
+        return false;
+    return dir_readdir(f->d, name);
 }
 

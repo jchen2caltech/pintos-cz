@@ -180,6 +180,10 @@ struct f_info {
     /* file descriptor */
     uint32_t fd;
     
+    struct dir* d;
+    
+    bool isdir;
+    
 };
 
 /*! If false (default), use round-robin scheduler.

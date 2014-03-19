@@ -18,6 +18,7 @@
 #include "userprog/process.h"
 #endif
 #include "filesys/file.h"
+#include "filesys/directory.h"
 #include "vm/frame.h"
 #include "vm/page.h"
 
@@ -347,7 +348,10 @@ void thread_exit(void) {
     while (!list_empty(&t->f_lst)) {
         ce = list_pop_front(&t->f_lst);
         cf = list_entry(ce, struct f_info, elem);
-        file_close(cf->f);
+        if (cf->isdir)
+            dir_close(cf->d);
+        else
+            file_close(cf->f);
         free(cf);
     }
     /* Free all remaining child-returnstats */
@@ -356,6 +360,9 @@ void thread_exit(void) {
         ctrs = list_entry(ce, struct thread_return_status, elem);
         free(ctrs);
     }
+    
+    if (t->cur_dir != NULL)
+        dir_close(t->cur_dir);
 
 #endif
 

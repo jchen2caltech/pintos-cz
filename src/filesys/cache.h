@@ -6,13 +6,15 @@
 #include "threads/synch.h"
 #include "devices/timer.h"
 
-#define CACHE_MAXSIZE 64
-#define CACHE_WRITE_TIME 5*TIMER_FREQ
+#define CACHE_MAXSIZE 64                /* Allow maximum of 64 cache blocks */   
+#define CACHE_WRITE_TIME 5*TIMER_FREQ   /* Write dirty cache back every 5 sec */
 
-
+/*! Cache entry
+    Records necessary information for maintaining 1 cache block
+ */
 struct cache_entry {
-    block_sector_t sector;
-    uint8_t cache_block[BLOCK_SECTOR_SIZE];
+    block_sector_t sector;              /* Corresponding sector in disk */
+    uint8_t cache_block[BLOCK_SECTOR_SIZE]; /* Actual storage block */
 
     struct list_elem elem;              /* List element */
     int open_count;                     /* Number of processes opening */
@@ -20,6 +22,8 @@ struct cache_entry {
     bool dirty;                         /* Whether cache is dirty */
 };
 
+/*! Cache system utility union
+ */
 struct cache_system {
     struct list cache_list;             /* List of cache blocks */
     struct lock cache_lock;             /* Global cache lock */

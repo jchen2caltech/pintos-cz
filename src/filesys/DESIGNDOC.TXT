@@ -37,6 +37,35 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+/*! On-disk inode.
+    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
+struct inode_disk {
+    block_sector_t start;               /*!< First data sector. */
+    off_t length;                       /*!< File size in bytes. */
+    uint32_t type;                      /*!< Type of the inode: file or dir */
+    unsigned magic;                     /*!< Magic number. */
+    uint32_t unused[124];               /*!< Not used. */
+};
+
+/*! In-memory inode. */
+struct inode {
+    struct list_elem elem;              /*!< Element in inode list. */
+    block_sector_t sector;              /*!< Sector number of disk location. */
+    int open_cnt;                       /*!< Number of openers. */
+    bool removed;                       /*!< True if deleted, false otherwise. */
+    int deny_write_cnt;                 /*!< 0: writes ok, >0: deny writes. */
+    struct inode_disk data;             /*!< Inode content. */
+    struct lock lock;                   /*!< Lock. */
+    off_t read_length;                  /*!< Length ready for reading. */
+};
+
+The inode_disk is the on-disk meta-information for a file. It occupies
+exactly 1 block sector.
+
+The inode is the meta-information for a file after it has been opened. It
+is enlisted in a global inode list. The use of read_length and lock are 
+described in A4 and A3 respectively. 
+
 >> A2: What is the maximum size of a file supported by your inode
 >> structure?  Show your work.
 
@@ -112,6 +141,26 @@ find a sector.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+struct f_info {
+    /* The file object */
+    struct file* f;
+    /* The position of current access */
+    off_t pos;
+    /* List element for the list of all files of a process */
+    struct list_elem elem;
+    /* file descriptor */
+    uint32_t fd;
+    
+    struct dir* d;
+    
+    bool isdir;
+    
+};
+
+Two fields are added to the f_info structure since last project, namely
+the <bool isdir> and the <struct dir* d>, to let the f_info struct support
+directory as well. 
+
 ---- ALGORITHMS ----
 
 >> B2: Describe your code for traversing a user-specified path.  How
@@ -168,6 +217,34 @@ cwd inheritance very straight-forward.
 >> C1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+
+struct cache_entry {
+    block_sector_t sector;              /* Corresponding sector in disk */
+    uint8_t cache_block[BLOCK_SECTOR_SIZE]; /* Actual storage block */
+
+    struct list_elem elem;              /* List element */
+    int open_count;                     /* Number of processes opening */
+    bool accessed;                      /* Whether cache has been accessed */
+    bool dirty;                         /* Whether cache is dirty */
+};
+
+struct cache_system {
+    struct list cache_list;             /* List of cache blocks */
+    struct lock cache_lock;             /* Global cache lock */
+    uint32_t cache_count;               /* Number of cache blocks allocated */
+    struct list_elem *evict_pointer;    /* For implementing clock algorithm */
+};
+
+struct cache_system filesys_cache;
+
+1. The cache_entry records necessary information for maintaining a cache block.
+The sector and cache_block fields are used for read/write operations while
+open_count, accessed and dirty are used for eviction, as described in C2. 
+
+2. The cache_system integrates several structs necessary for maintaining a
+cache system with multiple cache blocks (hard coded at 64 cache blocks max). 
+The cache_list enlisted every cache block allocated by far, while cache_lock
+is used for synchronization. 
 
 ---- ALGORITHMS ----
 

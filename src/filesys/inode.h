@@ -16,7 +16,7 @@
 struct inode_disk {
     block_sector_t start;               /*!< First data sector. */
     off_t length;                       /*!< File size in bytes. */
-    uint32_t type;
+    uint32_t type;                      /*!< Type of the inode: file or dir */
     unsigned magic;                     /*!< Magic number. */
     uint32_t unused[124];               /*!< Not used. */
 };
@@ -29,8 +29,9 @@ struct inode {
     bool removed;                       /*!< True if deleted, false otherwise. */
     int deny_write_cnt;                 /*!< 0: writes ok, >0: deny writes. */
     struct inode_disk data;             /*!< Inode content. */
-    struct lock lock;
-    off_t read_length;
+    struct lock lock;                   /*!< Lock. */
+    off_t read_length;                  /*!< Length ready for reading. */
+};
 };
 struct bitmap;
 

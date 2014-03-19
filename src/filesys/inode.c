@@ -426,6 +426,7 @@ off_t inode_read_at(struct inode *inode, void *buffer_, off_t size, off_t offset
             c = cache_get(sector_idx, false);
             memcpy(buffer + bytes_read, (uint8_t *)&c->cache_block + sector_ofs, 
                 chunk_size);
+            c->open_count--;
         
             /* Advance. */
             size -= chunk_size;
@@ -460,6 +461,7 @@ off_t inode_read_at(struct inode *inode, void *buffer_, off_t size, off_t offset
             c = cache_get(block_i[index_in_block], false);
             memcpy(buffer + bytes_read, (uint8_t *)&c->cache_block + sector_ofs, 
                    chunk_size);
+            c->open_count--;
             
             /* Advance. */
             size -= chunk_size;
@@ -514,6 +516,7 @@ off_t inode_write_at(struct inode *inode, const void *buffer_, off_t size, off_t
             memcpy((uint8_t *)&c->cache_block + sector_ofs, buffer + bytes_written,
                 chunk_size);
             c->dirty = true;
+            c->open_count--;
 
             /* Advance. */
             size -= chunk_size;
@@ -553,6 +556,8 @@ off_t inode_write_at(struct inode *inode, const void *buffer_, off_t size, off_t
             memcpy((uint8_t *)&c->cache_block + sector_ofs, buffer + bytes_written,
                 chunk_size);
             c->dirty = true;
+            c->open_count--;
+            
             //if (offset == 0 && bytes_written == 0) {
               //  printf("%x %x %x %x written\n\n", c->cache_block[0], c->cache_block[1], c->cache_block[2], c->cache_block[3]);
             //}

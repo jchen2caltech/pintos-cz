@@ -87,7 +87,7 @@ struct cache_entry *cache_evict(void) {
         result = list_entry(curr, struct cache_entry, elem);
         if (result->accessed)
             result->accessed = false;
-        else {
+        else if (result->open_count == 0) {
             if (result->dirty) {
               //  printf("writing back to sector %d\n\n", result->sector);
                 //printf("%x %x %x %x written cache\n\n", result->cache_block[0], result->cache_block[1], result->cache_block[2], result->cache_block[3]);

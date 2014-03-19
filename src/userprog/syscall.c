@@ -258,6 +258,9 @@ bool create(const char *f_name, unsigned initial_size) {
     if (!decompose_dir(f_name, name, &cur_dir)){
         return false;
     }
+
+    if (!(*f_name))
+        return false;
     
     /* Create the file, while locking the file system. */
     lock_acquire(&filesys_lock);
@@ -278,9 +281,12 @@ bool remove(const char *f_name) {
     if (!checkva(f_name))
         return false;
     
+    if (strcmp(".", f_name) == 0 || strcmp("..", f_name) == 0)
+        return false;
+
     if (!decompose_dir(f_name, name, &cur_dir))
         return false;
-        
+
     /* Remove the file, while locking the file system. */
     lock_acquire(&filesys_lock);
     bool flag = filesys_dir_remove(name, cur_dir);

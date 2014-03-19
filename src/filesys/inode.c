@@ -179,6 +179,7 @@ bool inode_alloc_block(struct inode_disk* head, off_t length) {
     size_t index_in_block;
     off_t left;
     bool new_index_block = false;
+    bool new_start_block = false;
     
     char zeros[BLOCK_SECTOR_SIZE];
     
@@ -201,19 +202,22 @@ bool inode_alloc_block(struct inode_disk* head, off_t length) {
         if (free_map_allocate(1, &index)) {
             block_i[MAX_BLOCKS] = 0;
             index_in_block = 0;
-            new_index_block = true;
+            
         } else {
             return false;    
         }
         //printf("allocating a new index sector: %d with %d\n", index, MAX_BLOCKS);
         
-        if (head->start == 0)
+        if (head->start == 0){
             head->start = index;
+            new_start_block = true;
+        }
         else {
             prev_index = inode_get_index_block(head, head->length - 1);
             block_read(fs_device, prev_index, &prev_i);
             prev_i[MAX_BLOCKS] = index;
             block_write(fs_device, prev_index, &prev_i);
+            new_index_block = true;
         }
     } else {
         index = inode_get_index_block(head, head->length - 1);
@@ -222,6 +226,11 @@ bool inode_alloc_block(struct inode_disk* head, off_t length) {
     }
     
     if (!free_map_allocate(1, &new)){
+        
+        if (new_start_block){
+            free_map_release(index, 1);
+            head->start = 0;
+        }
         
         if (new_index_block){
             prev_i[MAX_BLOCKS] = 0;
@@ -341,7 +350,7 @@ void inode_close(struct inode *inode) {
                 
                 cur_i = 0;
                 cur_sec = 0;
-                cur_block_i = inode_get_index_block(&inode->data, 0);
+                cur_block_i = inode->data.start;
                 
                 while (cur_i < index_blocks && cur_sec <= sectors){
                     block_read(fs_device, cur_block_i, &block_i);

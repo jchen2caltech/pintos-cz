@@ -345,7 +345,6 @@ void thread_exit(void) {
     process_exit();
     t = thread_current();
     /* Free all remaining opened files */
-    //printf("deleting files.\n");
     while (!list_empty(&t->f_lst)) {
         ce = list_pop_front(&t->f_lst);
         cf = list_entry(ce, struct f_info, elem);
@@ -355,17 +354,14 @@ void thread_exit(void) {
             file_close(cf->f);
         free(cf);
     }
-    //printf("done deleting files.\n");
     /* Free all remaining child-returnstats */
     while (!list_empty(&t->child_returnstats)) {
         ce = list_pop_front(&t->child_returnstats);
         ctrs = list_entry(ce, struct thread_return_status, elem);
         free(ctrs);
     }
-    //printf("deleting cur_dir\n");
     if (t->cur_dir != NULL)
         dir_close(t->cur_dir);
-    //printf("done deleting cur_dir\n");
 #endif
 
 

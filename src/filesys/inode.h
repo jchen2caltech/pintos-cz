@@ -32,7 +32,7 @@ struct inode {
     struct lock lock;                   /*!< Lock. */
     off_t read_length;                  /*!< Length ready for reading. */
 };
-};
+
 struct bitmap;
 
 void inode_init(void);

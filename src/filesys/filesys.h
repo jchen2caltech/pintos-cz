@@ -20,7 +20,6 @@ struct file *filesys_open(const char *name);
 bool filesys_remove(const char *name);
 
 bool filesys_dir_create(const char *name, off_t initial_size, struct dir* dir);
-struct file *filesys_dir_open(const char *name, struct dir* dir);
 bool filesys_dir_remove(const char *name, struct dir* dir);
 
 #endif /* filesys/filesys.h */

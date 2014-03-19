@@ -20,18 +20,30 @@ struct dir_entry {
 };
 
 /*! Creates a directory with space for ENTRY_CNT entries in the
-    given SECTOR.  Returns true if successful, false on failure. */
-bool dir_create(block_sector_t sector, size_t entry_cnt, block_sector_t parent) {
+    given SECTOR and the parent dir's sector.  
+    Returns true if successful, false on failure. */
+bool dir_create(block_sector_t sector, size_t entry_cnt, 
+                block_sector_t parent) {
     struct dir* dir;
+    
+    /* The directory name for parent directory*/
     const char par[3] = "..";
+    
+    /* The directory name for the current directory*/
     const char cur[2] = ".";
     
+    /* Create a inode sector*/
     if (!inode_dir_create(sector, (entry_cnt + 2) * sizeof(struct dir_entry)))
         return false;
     
+    /* Open the inode*/
     dir = dir_open(inode_open(sector));
+    
+    /* Add the current directory and the parent directory*/
     if (!dir_add(dir, cur, sector) || !dir_add(dir, par, parent)) {
+        /* Otherwise remove the newly allocated inode */
         inode_remove(dir_get_inode(dir));
+        /* Close this directory. */
         dir_close(dir);
         return false;    
     }
@@ -109,10 +121,11 @@ static bool lookup(const struct dir *dir, const char *name,
     return false;
 }
 
-/*! Searches DIR for a file with the given NAME and returns true if one exists,
+/*! Searches DIR for a file with the given NAME and returns true if one exist,
     false otherwise.  On success, sets *INODE to an inode for the file,
     otherwise to a null pointer.  The caller must close *INODE. */
-bool dir_lookup(const struct dir *dir, const char *name, struct inode **inode) {
+bool dir_lookup(const struct dir *dir, const char *name, 
+                struct inode **inode) {
     struct dir_entry e;
 
     ASSERT(dir != NULL);
@@ -193,6 +206,8 @@ bool dir_remove(struct dir *dir, const char *name) {
         goto done;
 
     if (inode->data.type == FILE_INODE_DISK){
+        /* If we are removing a file, then remove the entry right away. */
+        
         /* Erase directory entry. */
         e.in_use = false;
         if (inode_write_at(dir->inode, &e, sizeof(e), ofs) != sizeof(e))
@@ -202,13 +217,21 @@ bool dir_remove(struct dir *dir, const char *name) {
         inode_remove(inode);
         success = true;
     } else if (inode->data.type == DIR_INODE_DISK){
+        /* If we are actually removing a subdirectory, then we can only 
+         * remove if the directory is empty. */
+        
+        /* Open up the sub-directory*/ 
         subdir = dir_open(inode);
+        
+        /* Check whether the sub-directory is empty. */
         if (dir_readdir(subdir, name)){
+            /* If it is not empty, then free dir we just opened and return. */
             if (subdir != NULL)
                 free(subdir);
              
             goto done;
         } else {
+            /* We do not need this directory any more, then just free it. */
             free(subdir);
 
             /* Erase directory entry. */
@@ -226,15 +249,20 @@ done:
     return success;
 }
 
-/*! Reads the next directory entry in DIR and stores the name in NAME.  Returns
+/*! Reads the next directory entry in DIR and stores the name in NAME. Returns
     true if successful, false if the directory contains no more entries. */
 bool dir_readdir(struct dir *dir, char name[NAME_MAX + 1]) {
     struct dir_entry e;
+    
+    /* Parent directory name. */
     char par[3] = "..";
+    /* Current diretory name. */
     char cur[2] = ".";
 
     while (inode_read_at(dir->inode, &e, sizeof(e), dir->pos) == sizeof(e)) {
         dir->pos += sizeof(e);
+        /* return true if the entry is in use and the entry is neither the 
+         * parent dir nor the current dir. */
         if (e.in_use && (strcmp(e.name, par) != 0) 
                      && (strcmp(e.name, cur) != 0)) {
             strlcpy(name, e.name, NAME_MAX + 1);

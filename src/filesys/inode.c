@@ -106,18 +106,6 @@ bool inode_file_create(block_sector_t sector, off_t length) {
         disk_inode->magic = INODE_MAGIC;
         disk_inode->start = 0;
         disk_inode->type = FILE_INODE_DISK;
-        /*if (free_map_allocate(sectors, &disk_inode->start)) {
-            block_write(fs_device, sector, disk_inode);
-            if (sectors > 0) {
-                static char zeros[BLOCK_SECTOR_SIZE];
-                size_t i;
-              
-                for (i = 0; i < sectors; i++) 
-                    block_write(fs_device, disk_inode->start + i, zeros);
-            }
-            success = true; 
-        }*/
-        
         
         while (length > 0) {
             if (length >= BLOCK_SECTOR_SIZE) {
@@ -292,7 +280,9 @@ struct inode * inode_open(block_sector_t sector) {
     inode->open_cnt = 1;
     inode->deny_write_cnt = 0;
     inode->removed = false;
+    lock_init(&inode->lock);
     block_read(fs_device, inode->sector, &inode->data);
+    inode->read_length = inode->data.length;
     return inode;
 }
 
@@ -383,7 +373,7 @@ off_t inode_read_at(struct inode *inode, void *buffer_, off_t size, off_t offset
     block_sector_t sector_idx;
     off_t temp = size;
 
-    if (inode_length(inode) < offset + size)
+    if (inode->read_length < offset + size)
         return 0;
 
     while (size > 0) {
@@ -467,7 +457,9 @@ off_t inode_write_at(struct inode *inode, const void *buffer_, off_t size, off_t
         return 0;
 
     if (inode_length(inode) < offset + size) {
+        lock_acquire(&inode->lock);
         inode_extend(inode, offset + size);
+        lock_release(&inode->lock);
     }
 
     while (size > 0) {
@@ -493,6 +485,7 @@ off_t inode_write_at(struct inode *inode, const void *buffer_, off_t size, off_t
             size -= chunk_size;
             offset += chunk_size;
             bytes_written += chunk_size;
+            inode->read_length += chunk_size;
         } else {
             block_sector_t sector_idx = inode_get_index_block(&inode->data, offset);
             if (offset % (BLOCK_SECTOR_SIZE * MAX_BLOCKS) == 0)
@@ -533,6 +526,7 @@ off_t inode_write_at(struct inode *inode, const void *buffer_, off_t size, off_t
             size -= chunk_size;
             offset += chunk_size;
             bytes_written += chunk_size;
+            inode->read_length += chunk_size;
         }
     }
     //printf("done writing.\n");

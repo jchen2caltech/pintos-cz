@@ -1,0 +1,224 @@
+       	       	     +-------------------------+
+                     |          CS 124         |
+                     | PROJECT 6: FILE SYSTEMS |
+                     |     DESIGN DOCUMENT     |
+                     +-------------------------+
+
+---- GROUP ----
+
+>> Fill in the names and email addresses of your group members.
+
+FirstName LastName <email@domain.example>
+FirstName LastName <email@domain.example>
+FirstName LastName <email@domain.example>
+
+>> Specify how many late tokens you are using on this assignment:  
+
+>> What is the Git repository and commit hash for your submission?
+
+   Repository URL:  
+   commit ...
+
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, notes for the
+>> TAs, or extra credit, please give them here.
+
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation, course
+>> text, lecture notes, and course instructors.
+
+		     INDEXED AND EXTENSIBLE FILES
+		     ============================
+
+---- DATA STRUCTURES ----
+
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+>> A2: What is the maximum size of a file supported by your inode
+>> structure?  Show your work.
+
+Our inode structure supports unlimited file size, because the
+index blocks are structured as linked lists. Each index block
+contains 127 file-sector-entry and 1 entry at the end that
+points to the next index block. Thus, each index block
+provides 127*512 = 65 KB file space support, and when this
+length is exceeded, new index blocks will be allocated and
+linked to the current index blocks. 
+
+---- SYNCHRONIZATION ----
+
+>> A3: Explain how your code avoids a race if two processes attempt to
+>> extend a file at the same time.
+
+When the writing of a file requires file extension, lock_acquire
+will be called upon the inode->lock, and when the extension is
+completed, the lock will be released. This prevents the race where
+two processes extend the same file at the same time. 
+
+>> A4: Suppose processes A and B both have file F open, both
+>> positioned at end-of-file.  If A reads and B writes F at the same
+>> time, A may read all, part, or none of what B writes.  However, A
+>> may not read data other than what B writes, e.g. if B writes
+>> nonzero data, A is not allowed to see all zeros.  Explain how your
+>> code avoids this race.
+
+The inode-disk structure has a "length" field, and the 
+inode structure has a "read_length" field. In inode_extend(), 
+the "length" field is increased and the memory between original EOF
+and the new EOF is zeroed out, but the read_length field remains
+unchanged. The inode_read_at() function always check if the read
+position exceeds the current read_length, preventing the reader
+from reading all zeros. 
+
+>> A5: Explain how your synchronization design provides "fairness".
+>> File access is "fair" if readers cannot indefinitely block writers
+>> or vice versa.  That is, many processes reading from a file cannot
+>> prevent forever another process from writing the file, and many
+>> processes writing to a file cannot prevent another process forever
+>> from reading the file.
+
+
+
+
+---- RATIONALE ----
+
+>> A6: Is your inode structure a multilevel index?  If so, why did you
+>> choose this particular combination of direct, indirect, and doubly
+>> indirect blocks?  If not, why did you choose an alternative inode
+>> structure, and what advantages and disadvantages does your
+>> structure have, compared to a multilevel index?
+
+We implemented 1-level index with a linked-list-structured index
+block array. As described in A2, this structure, compared to
+multilevel index, allow us to support files of unlimited size
+(as long as allowed by the disk) without too much overhead
+(1 index block per 127 file blocks). However, this structure
+makes it relatively slow when trying to find a sector in a
+large file, because we'd have to traverse the linked list to
+find a sector. 
+
+			    SUBDIRECTORIES
+			    ==============
+
+---- DATA STRUCTURES ----
+
+>> B1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+---- ALGORITHMS ----
+
+>> B2: Describe your code for traversing a user-specified path.  How
+>> do traversals of absolute and relative paths differ?
+
+The decompose_dir() function in syscall.c is in charge of parsing a
+user-specified path and traversing it. It first checks if the first character
+in the path is "/", and if it is, then this is an absolute path, and the
+traverse starts from the root directory; if not, then this is the traverse
+starts from the thread->cur_dir directory.
+The function then tokenize the path by taking "/" as separators. 
+Every time a token is separated, the function advances into the 
+token-specified directory, until the path is finished. 
+
+---- SYNCHRONIZATION ----
+
+>> B4: How do you prevent races on directory entries?  For example,
+>> only one of two simultaneous attempts to remove a single file
+>> should succeed, as should only one of two simultaneous attempts to
+>> create a file with the same name, and so on.
+
+>> B5: Does your implementation allow a directory to be removed if it
+>> is open by a process or if it is in use as a process's current
+>> working directory?  If so, what happens to that process's future
+>> file system operations?  If not, how do you prevent it?
+
+We do support removing a directory (assuming it is empty) even if it is open
+by a process or if it is in use as a process's cwd. However, such removal
+only marks the directory as "removed", and the real removal only takes place
+after the last process that has it opened call close on it. 
+After a directory has been marked as "removed", future creations/write
+will not be allowed, as these operations will check the "removed" flag.
+
+
+---- RATIONALE ----
+
+>> B6: Explain why you chose to represent the current directory of a
+>> process the way you did.
+
+We chose to add a field (struct dir *cur_dir) in the thread struct to
+represent the current working directory. This is because the dir_open()
+dir_close() and dir_reopen() functions are easy to use for setting 
+and re-setting current directories, and dir_reopen() makes process
+cwd inheritance very straight-forward. 
+
+			     BUFFER CACHE
+			     ============
+
+---- DATA STRUCTURES ----
+
+>> C1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+---- ALGORITHMS ----
+
+>> C2: Describe how your cache replacement algorithm chooses a cache
+>> block to evict.
+
+We implemented clock-algorithm for cache-eviction, similar to our
+frame-eviction algorithm. The overall filesys_cache structure
+keeps a "evict_pointer" that points to the next element in the
+cache-list to be checked for eviction next time.
+
+At the start of the eviction, start at the evict_pointer.
+Circularly go through the list of cache, with the following rules:
+1. If a cache's accessed bit is set, skip it and reset the bit. 
+2. If a cache's accessed bit is clear, enter further checking. 
+    1. Write the cache back to its corresponding sector if the
+       dirty bit  
+
+>> C3: Describe your implementation of write-behind.
+
+>> C4: Describe your implementation of read-ahead.
+
+---- SYNCHRONIZATION ----
+
+>> C5: When one process is actively reading or writing data in a
+>> buffer cache block, how are other processes prevented from evicting
+>> that block?
+
+>> C6: During the eviction of a block from the cache, how are other
+>> processes prevented from attempting to access the block?
+
+---- RATIONALE ----
+
+>> C7: Describe a file workload likely to benefit from buffer caching,
+>> and workloads likely to benefit from read-ahead and write-behind.
+
+			   SURVEY QUESTIONS
+			   ================
+
+Answering these questions is optional, but it will help us improve the
+course in future quarters.  Feel free to tell us anything you
+want--these questions are just to spur your thoughts.  You may also
+choose to respond anonymously in the feedback survey on the course
+website.
+
+>> In your opinion, was this assignment, or any one of the three problems
+>> in it, too easy or too hard?  Did it take too long or too little time?
+
+>> Did you find that working on a particular part of the assignment gave
+>> you greater insight into some aspect of OS design?
+
+>> Is there some particular fact or hint we should give students in
+>> future quarters to help them solve the problems?  Conversely, did you
+>> find any of our guidance to be misleading?
+
+>> Do you have any suggestions for the TAs to more effectively assist
+>> students in future quarters?
+
+>> Any other comments?
+

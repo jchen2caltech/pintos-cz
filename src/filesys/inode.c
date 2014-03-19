@@ -56,14 +56,22 @@ bool inode_create(block_sector_t sector, off_t length) {
     /* If this assertion fails, the inode structure is not exactly
        one sector in size, and you should fix that. */
     ASSERT(sizeof *disk_inode == BLOCK_SECTOR_SIZE);
-
+    
+    /* Allocate a new disk_inode for this file. */
     disk_inode = calloc(1, sizeof *disk_inode);
     if (disk_inode != NULL) {
+        
+        /* Find out how many sectors this length needs. */
         size_t sectors = bytes_to_sectors(length);
+        
+        /* Initialize the fields of disk_inode. */
         disk_inode->length = length;
         disk_inode->magic = INODE_MAGIC;
         disk_inode->type = NON_FILE_INODE_DISK;
+        
         if (free_map_allocate(sectors, &disk_inode->start)) {
+            /* For non-file or dir type of inode, we will just assign 
+             * consecutive sectors. */
             block_write(fs_device, sector, disk_inode);
             if (sectors > 0) {
                 static char zeros[BLOCK_SECTOR_SIZE];
@@ -88,7 +96,6 @@ bool inode_create(block_sector_t sector, off_t length) {
 bool inode_file_create(block_sector_t sector, off_t length) {
     struct inode_disk *disk_inode = NULL;
     bool success = false;
-    size_t i = 0;
     off_t block_write_length;
     
     ASSERT(length >= 0);
@@ -101,7 +108,7 @@ bool inode_file_create(block_sector_t sector, off_t length) {
     disk_inode = calloc(1, sizeof *disk_inode);
     if (disk_inode != NULL) {
         /* Find out how many sectors this length needs. */
-        size_t sectors = bytes_to_sectors(length);
+        //size_t sectors = bytes_to_sectors(length);
         
         /* Initialize the fields of disk_inode. */
         disk_inode->length = 0;
@@ -144,7 +151,6 @@ bool inode_file_create(block_sector_t sector, off_t length) {
 bool inode_dir_create(block_sector_t sector, off_t length) {
     struct inode_disk *disk_inode = NULL;
     bool success = false;
-    size_t i = 0;
     off_t block_write_length;
 
     
@@ -160,7 +166,7 @@ bool inode_dir_create(block_sector_t sector, off_t length) {
     if (disk_inode != NULL) {
         
         /* Find out how many sectors this length needs. */
-        size_t sectors = bytes_to_sectors(length);
+        //size_t sectors = bytes_to_sectors(length);
         
          /* Initialize the fields of disk_inode. */
         disk_inode->length = 0;
@@ -260,55 +266,88 @@ bool inode_alloc_block(struct inode_disk* head, off_t length) {
         }
         
         if (head->start == 0){
-            /* If we have not assigned a starting index to the inode yet. */
+            /* If we have not assigned a starting index to the inode yet, then
+             * assign the index sector number to inode's start. */
             head->start = index;
+            /* Set the start-index-sector flag as true. */
             new_start_block = true;
         }
         else {
+            /* Otherwise, we will append this new index sector to the last 
+             * index sector of the inode. */
+            
+            /* Look for the block_sector_t of the last index sector. */
             prev_index = inode_get_index_block(head, head->length - 1);
+            /* Read the data from the last index sector. */
             block_read(fs_device, prev_index, &prev_i);
+            /* Set the last block_sector_t as the new index sector's number.*/
             prev_i[MAX_BLOCKS] = index;
+            /* Write the index data back to disk.*/
             block_write(fs_device, prev_index, &prev_i);
+            /* Set the new index block to true. */
             new_index_block = true;
         }
     } else {
+        /* As we do not need a new index block in this case. */
+        /* Find the last index block. */
         index = inode_get_index_block(head, head->length - 1);
+        /* Read index data from disk. */
         block_read(fs_device, index, &block_i);
+        /* Set the in-sector index according number of sectors in inode. */
         index_in_block = (sectors % MAX_BLOCKS);
     }
     
     if (!free_map_allocate(1, &new)){
-        
+        /* Cannot allocate a new sector. */
         if (new_start_block){
+            /* As we allocated a new start index sector for nothing. 
+             * Free everything: map_release the index sector. Set the start
+             * of inode back to 0. */
             free_map_release(index, 1);
             head->start = 0;
         }
         
         if (new_index_block){
+            /* As we allocated a new index sector for nothing. 
+             * Free everything: map_release the index sector. Set the 
+             * "pointer" in the last index sector back to NULL (or 0). */
             prev_i[MAX_BLOCKS] = 0;
             free_map_release(index, 1);
         }
         return false;
     }
     else {
-        //printf("allocating new file sector: %d\n", new);
+        /* Store the new sector's number on to the index sector. */
         block_i[index_in_block] = new;
+        /* Write the index data back to disk. */
         block_write(fs_device, index, &block_i);
+        /* Write zeros to the new sector. */
         block_write(fs_device, new, &zeros);
     }
-    //printf("nice\n");
+    /* Update the length of the inode. */
     head->length += length;
     return true;
     
 }
 
+/*! Get the index sector number of an inode, given the offset. */
 block_sector_t inode_get_index_block(struct inode_disk* head, off_t length) {
+    /* The array to read the index data*/
     block_sector_t block_i[MAX_BLOCKS + 1];
-    size_t sectors = bytes_to_sectors(length + 1);
+    
+    /* The index sector number*/
     block_sector_t ret;
+    
+    /* Find number of sectors needed to fit such length*/
+    size_t sectors = bytes_to_sectors(length + 1);
+    
+    /* If offset is less than or equal to zero, than we will just rest return 
+     * the start index of the inode. */
     if (length <= 0)
         return head->start;
-    //printf("sectors %d\n\n", sectors);
+    
+    /* Iterate through the index blocks, until we are at the index block of 
+     * the given length's corresponding number of sectors.*/
     ret = head->start;
     block_read(fs_device, head->start, &block_i);
     while (sectors > MAX_BLOCKS) {
@@ -316,7 +355,6 @@ block_sector_t inode_get_index_block(struct inode_disk* head, off_t length) {
         block_read(fs_device, ret, &block_i);
         sectors -= MAX_BLOCKS;
     }
-    //printf("Searching for %d, and found index block %d\n", length, ret);
     return ret;
 }
 
@@ -371,8 +409,8 @@ block_sector_t inode_get_inumber(const struct inode *inode) {
     If this was the last reference to INODE, frees its memory.
     If INODE was also a removed inode, frees its blocks. */
 void inode_close(struct inode *inode) {
-    //printf("Closing...\n");
-    size_t i, sectors, cur_sec, cur_i, index_blocks;
+
+    size_t i,sectors, cur_sec, cur_i, index_blocks;
     block_sector_t block_i[MAX_BLOCKS + 1];
     block_sector_t cur_block_i;
     
@@ -388,47 +426,60 @@ void inode_close(struct inode *inode) {
         /* Deallocate blocks if removed. */
         if (inode->removed) {
             if (inode->data.type == NON_FILE_INODE_DISK) {
+                /* Remove the consecutive sectors and the inode. */
                 free_map_release(inode->sector, 1);
                 free_map_release(inode->data.start,
                                 bytes_to_sectors(inode->data.length)); 
             } else if (inode->data.start != 0) {
+                /* We only need to free sectors if we have allocated the
+                 * start index sector for the inode.*/
+                
+                /* Get number of sectors allocated in this inode.*/
                 sectors = bytes_to_sectors(inode_length(inode));
                 
+                /* Get the number of index sectors in this inode. */
                 index_blocks = sectors / MAX_BLOCKS;
-                
                 if (sectors % MAX_BLOCKS != 0)
                     ++index_blocks;
-                //printf("sectors %d and index_blocks %d\n", sectors, index_blocks);
                 
+                /* Index for index sectors*/
                 cur_i = 0;
+                /* Index for data sectors. */
                 cur_sec = 0;
+                /* block_sector_t of the current index sector we are 
+                 * iterating. */
                 cur_block_i = inode->data.start;
                 
+                /* Iterate through all index sectors and data sectors. */
                 while (cur_i < index_blocks && cur_sec <= sectors){
+                    /* Read the index data. */
                     block_read(fs_device, cur_block_i, &block_i);
                     for (i = 0; i < MAX_BLOCKS; i++) {
+                        /* Free the data sectors stored on the index sector. */
                         ++ cur_sec;
                         if (cur_sec > sectors)
                             break;
-                        //printf("releasing block%d\n", block_i[i]);
                         free_map_release(block_i[i], 1);
-                        //printf("done releasing block~~\n");
+
                     }
-                    //printf("releasing cur block %d\n", cur_block_i);
-                    free_map_release(cur_block_i, 1);
-                    //printf("done releasing cur block\n");
-                    cur_block_i = block_i[MAX_BLOCKS];
                     
+                    /* Free this index sector. */
+                    free_map_release(cur_block_i, 1);
+                    /* Get the nex index sector's number. */
+                    cur_block_i = block_i[MAX_BLOCKS];
                     ++cur_i;
                     
                 }
-            free_map_release(inode->sector, 1);
-            //printf("done removing\n");
+                
+                /* Free the inode on the disk. */
+                free_map_release(inode->sector, 1);
             }
-            
         } else {
+            /* As we are not removing this file, we will just write the inode back to disk.*/
             block_write(fs_device, inode->sector, &inode->data);
         }
+        
+        /* Just free the inode struct if the file/dir is not removed. */
         free(inode); 
     }
 }
@@ -444,14 +495,24 @@ void inode_remove(struct inode *inode) {
    Returns the number of bytes actually read, which may be less
    than SIZE if an error occurs or end of file is reached. */
 off_t inode_read_at(struct inode *inode, void *buffer_, off_t size, off_t offset) {
-    //printf("Reading\n");
+    /* Set a pointer iterator for buffer. */
     uint8_t *buffer = buffer_;
+    
+    /* Bytes read from inode. */
     off_t bytes_read = 0;
+    
+    /* Cache entry of the data read. */
     struct cache_entry *c;
+    
+    /* In-sector index of the sector read from disk on its corresponding 
+     * index sector. */
     size_t index_in_block;
+    
+    /* Index sector data buffer */
     block_sector_t block_i[MAX_BLOCKS + 1];
+    
+    /* Sector number of the data read from disk*/
     block_sector_t sector_idx;
-    off_t temp = size;
 
     if (inode->read_length < offset + size)
         return 0;
@@ -471,10 +532,12 @@ off_t inode_read_at(struct inode *inode, void *buffer_, off_t size, off_t offset
             int chunk_size = size < min_left ? size : min_left;
             if (chunk_size <= 0)
                 break;
-
+            
+            /* Cache in the data*/
             c = cache_get(sector_idx, false);
-            memcpy(buffer + bytes_read, (uint8_t *)&c->cache_block + sector_ofs, 
-                chunk_size);
+            /* Copy the data from cache to buffer*/
+            memcpy(buffer + bytes_read, 
+                   (uint8_t *)&c->cache_block + sector_ofs, chunk_size);
             c->open_count--;
         
             /* Advance. */
@@ -482,8 +545,12 @@ off_t inode_read_at(struct inode *inode, void *buffer_, off_t size, off_t offset
             offset += chunk_size;
             bytes_read += chunk_size;
         } else  {
+            /* Get the index sector of the given inode and offset. */
             sector_idx = inode_get_index_block(&inode->data, 
                                                offset);
+            
+            /* Get the index of the sector in its corresponding index 
+             * sector. */
             if (offset % (BLOCK_SECTOR_SIZE * MAX_BLOCKS) == 0)
                 index_in_block = 0;
             else
@@ -501,13 +568,12 @@ off_t inode_read_at(struct inode *inode, void *buffer_, off_t size, off_t offset
             if (chunk_size <= 0)
                 break;
             
-            //printf("reading from index block %d at index %d\n", sector_idx, index_in_block);
-            
+            /* Read the index data from the index sector*/
             block_read(fs_device, sector_idx, &block_i);
             
-            //printf("reading from %d\n", block_i[index_in_block]);
-            
+            /* Cache in*/
             c = cache_get(block_i[index_in_block], false);
+            /* Copy data from cache to buffer */
             memcpy(buffer + bytes_read, (uint8_t *)&c->cache_block + sector_ofs, 
                    chunk_size);
             c->open_count--;
@@ -518,7 +584,7 @@ off_t inode_read_at(struct inode *inode, void *buffer_, off_t size, off_t offset
             bytes_read += chunk_size;
         }
     }
-    //printf("Done reading. %d; should be %d\n", bytes_read, temp);
+
     return bytes_read;
 }
 
@@ -528,9 +594,14 @@ off_t inode_read_at(struct inode *inode, void *buffer_, off_t size, off_t offset
     (Normally a write at end of file would extend the inode, but
     growth is not yet implemented.) */
 off_t inode_write_at(struct inode *inode, const void *buffer_, off_t size, off_t offset) {
-    //printf("Writing.\n");
+    /* Set a pointer iterator for buffer. */
     const uint8_t *buffer = buffer_;
+    
+    /* Bytes read from inode. */
     off_t bytes_written = 0;
+    
+    /* In-sector index of the sector read from disk on its corresponding 
+     * index sector. */
     struct cache_entry *c;
     size_t index_in_block;
     block_sector_t block_i[MAX_BLOCKS + 1];
@@ -643,7 +714,6 @@ off_t inode_length(const struct inode *inode) {
 }
 
 static off_t inode_extend(struct inode *inode, off_t length) {
-    static char zeros[BLOCK_SECTOR_SIZE];
     ASSERT(inode != NULL);
     struct inode_disk *head = &inode->data;
     off_t old_len = head->length;

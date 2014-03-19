@@ -130,6 +130,8 @@ token-specified directory, until the path is finished.
 >> should succeed, as should only one of two simultaneous attempts to
 >> create a file with the same name, and so on.
 
+Directory operations requires holding the directory's 
+
 >> B5: Does your implementation allow a directory to be removed if it
 >> is open by a process or if it is in use as a process's current
 >> working directory?  If so, what happens to that process's future
@@ -201,15 +203,38 @@ at the end to asynchronously read in the next sector.
 >> buffer cache block, how are other processes prevented from evicting
 >> that block?
 
-The cache 
+The cache_entry->open_count is used for preventing such a race. As
+described in C2, a page will only be evicted if its open_count is 0. During
+inode_read and inode_write, the open_count is incremented, and only 
+decremented back after they are done with the cache block. Therefore, 
+a cache being actively read or written will not be evicted.
 
 >> C6: During the eviction of a block from the cache, how are other
 >> processes prevented from attempting to access the block?
+
+The cache_get() function is the only place in which cache_evict() will be 
+called, and it acquires the cache_lock at start. Thus, other processes
+that are trying to find or acquire a cache block via cache_get() will have
+to wait for the lock until the eviction is done. 
 
 ---- RATIONALE ----
 
 >> C7: Describe a file workload likely to benefit from buffer caching,
 >> and workloads likely to benefit from read-ahead and write-behind.
+
+A workload that will be likely to benifit from buffer caching is one where
+multiple threads are actively accessing (read/modifying) the same relatively
+short file (less than or around 64 blocks). 
+
+A workload that will be likely to benifit from read ahead is one where
+the thread reads a file from start to end, where read ahead shortens the
+time that the thread has to actively wait for disk reading. 
+
+A workload that will be likely to benifit from write behind is one where
+the thread is constantly making changes to a relatively short file. Thus,
+instead of writing the change back to disk every time a write takes place,
+write behind allows the system to accumulate changes and write a number
+of changes at once.
 
 			   SURVEY QUESTIONS
 			   ================

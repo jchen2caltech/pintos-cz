@@ -7,15 +7,18 @@
 #include "threads/thread.h"
 #include "threads/malloc.h"
 
+/*! Initialize the cache system */
 void cache_init(void) {
     list_init(&filesys_cache.cache_list);
     lock_init(&filesys_cache.cache_lock);
     filesys_cache.cache_count = 0;
     filesys_cache.evict_pointer = NULL;
+    /* Create ghost thread for periodical write-back */
     thread_create("cache write background", PRI_DEFAULT, 
                   cache_write_background, NULL);
 }
 
+/*! Find a cache in the cache list that corresponds to a given sector */
 struct cache_entry *cache_find(block_sector_t sector) {
     struct list_elem *curr = list_begin(&filesys_cache.cache_list);
     struct cache_entry *curr_cache;
@@ -31,18 +34,19 @@ struct cache_entry *cache_find(block_sector_t sector) {
     return NULL;
 }
 
+/*! Find a cache that corresponds to a given sector, or create one if needed,
+    and import the sector from the disk if the cache is created here */
 static struct cache_entry *cache_readin(block_sector_t sector, bool dirty) {
 
     struct cache_entry *result;
     
+    /* If the cache already exists */
     if ((result = cache_find(sector)) != NULL) {
-        //printf("found cache %d\n\n", result->sector);
-        //printf("%d %x %x %x %x read cache found %d\n\n", result->dirty, result->cache_block[0], result->cache_block[1], result->cache_block[2], result->cache_block[3], result->sector);
-         
         result->dirty |= dirty;
         result->open_count++;
         return result;
     }
+    /* If there is room for one more cache block, create one */
     if (filesys_cache.cache_count < CACHE_MAXSIZE) {
         result = malloc(sizeof(struct cache_entry));
         if (!result)
@@ -51,15 +55,15 @@ static struct cache_entry *cache_readin(block_sector_t sector, bool dirty) {
         filesys_cache.cache_count++;
     }
     else 
+    /* If the cache system is full, evict an existing cache to make room */
         result = cache_evict();
     if (result) {
+        /* Initialize the created/evicted cache */
         result->sector = sector;
         result->dirty = dirty;
         result->accessed = true;
         result->open_count = 1;
         block_read(fs_device, sector, result->cache_block);
-        //printf("%d %x %x %x %x read cache %d\n\n", result->dirty, result->cache_block[0], result->cache_block[1], result->cache_block[2], result->cache_block[3], result->sector);
-            
     }
     else {
         PANIC("EVICTION FAILURE: cache eviction undefined bug");
@@ -68,18 +72,21 @@ static struct cache_entry *cache_readin(block_sector_t sector, bool dirty) {
     return result;
 }
 
+/*! Get a cache-block and load the sector content if not already
+    loaded */
 struct cache_entry *cache_get(block_sector_t sector, bool dirty) {
     struct cache_entry *result;
 
     lock_acquire(&filesys_cache.cache_lock);
     result = cache_readin(sector, dirty);
     lock_release(&filesys_cache.cache_lock);
-    cache_read_create(sector);
     return result;
 }
 
+/*! Evict a cache block from the cache list */
 struct cache_entry *cache_evict(void) {
     struct cache_entry *result;
+    /* Load the evict-pointer to start the clock algorithm */
     struct list_elem *curr = filesys_cache.evict_pointer;
 
     if (!curr)
@@ -89,18 +96,19 @@ struct cache_entry *cache_evict(void) {
         if (result->accessed)
             result->accessed = false;
         else if (result->open_count == 0) {
+            /* If no thread is actively accessing it */
             if (result->dirty) {
-              //  printf("writing back to sector %d\n\n", result->sector);
-                //printf("%x %x %x %x written cache\n\n", result->cache_block[0], result->cache_block[1], result->cache_block[2], result->cache_block[3]);
-            
+                /* Write the cache back if dirty */
                 block_write(fs_device, result->sector, &result->cache_block);
             }
+            /* Set the evict_pointer to the next element in the list */
             if (curr->next == list_end(&filesys_cache.cache_list))
                 filesys_cache.evict_pointer = NULL;
             else
                 filesys_cache.evict_pointer = list_next(curr);
             return result;
         }
+        /* Iterate circularly through the list */
         if (curr->next == list_end(&filesys_cache.cache_list))
             curr = list_begin(&filesys_cache.cache_list);
         else
@@ -109,6 +117,7 @@ struct cache_entry *cache_evict(void) {
     return NULL;
 }
 
+/* Write every dirty cache block back to disk and clear the dirty bit */
 void cache_write_to_disk(bool shut) {
     struct list_elem *curr = list_begin(&filesys_cache.cache_list);
     struct cache_entry *curr_cache;
@@ -124,6 +133,7 @@ void cache_write_to_disk(bool shut) {
             curr_cache->dirty = false;
         }
         if (shut) {
+            /* Used for freeing the cache system */
             list_remove(curr);
             free(curr_cache);
         }
@@ -132,18 +142,22 @@ void cache_write_to_disk(bool shut) {
     lock_release(&filesys_cache.cache_lock);
 }
 
+/* Main function for background write-behind */
 void cache_write_background(void *aux) {
     while (true) {
+        /* Wait for 5 sec */
         timer_sleep(CACHE_WRITE_TIME);
         cache_write_to_disk(false);
     }
 }
 
+/* Main function for background read-ahead */
 void cache_read_ahead(void *aux) {
     cache_readin(*((block_sector_t *)aux), false);
     free(aux);
 }
 
+/* Create a read-ahead thread */
 void cache_read_create(block_sector_t toread) {
     void *aux = malloc(sizeof(block_sector_t));
     if (aux)

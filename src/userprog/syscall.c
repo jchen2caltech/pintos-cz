@@ -260,9 +260,7 @@ bool create(const char *f_name, unsigned initial_size) {
     }
     
     /* Create the file, while locking the file system. */
-    lock_acquire(&filesys_lock);
     bool flag = filesys_dir_create(name, (off_t) initial_size, cur_dir);
-    lock_release(&filesys_lock);
 
     dir_close(cur_dir);
     return flag;
@@ -287,9 +285,7 @@ bool remove(const char *f_name) {
         return false;
 
     /* Remove the file, while locking the file system. */
-    lock_acquire(&filesys_lock);
     bool flag = filesys_dir_remove(name, cur_dir);
-    lock_release(&filesys_lock);
     //printf("name decomposed! %x\n\n", cur_dir);
     
     dir_close(cur_dir);
@@ -429,10 +425,10 @@ int read(uint32_t fd, void *buffer, unsigned size) {
         off_t pos = f->pos;
         
         /* Read from the file at f->pos */
-        lock_acquire(&filesys_lock);
+        //lock_acquire(&filesys_lock);
         read_size = (int) file_read_at(fin, buffer, (off_t) size, pos);
         f->pos += (off_t) read_size;
-        lock_release(&filesys_lock);
+        //lock_release(&filesys_lock);
         
     }
     return read_size;
@@ -465,11 +461,11 @@ int write(uint32_t fd, const void *buffer, unsigned size) {
         off_t pos = f->pos;
         
         /* Write to the file at f->pos */
-        lock_acquire(&filesys_lock);
+        //lock_acquire(&filesys_lock);
         write_size = (int) file_write_at(fout, buffer, (off_t) size, pos);
 
         f->pos += (off_t) write_size;
-        lock_release(&filesys_lock);
+        //lock_release(&filesys_lock);
         
     }
 

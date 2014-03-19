@@ -66,6 +66,7 @@ struct cache_entry *cache_get(block_sector_t sector, bool dirty) {
         PANIC("EVICTION FAILURE: cache eviction undefined bug");
     }
     lock_release(&filesys_cache.cache_lock);
+    cache_read_create(sector);
     return result;
 }
 

@@ -176,13 +176,22 @@ cache-list to be checked for eviction next time.
 At the start of the eviction, start at the evict_pointer.
 Circularly go through the list of cache, with the following rules:
 1. If a cache's accessed bit is set, skip it and reset the bit. 
-2. If a cache's accessed bit is clear, enter further checking. 
+2. If a cache's accessed bit is clear, enter:
     1. Write the cache back to its corresponding sector if the
-       dirty bit  
+       dirty bit is set. 
+    2. Select this cache for eviction (does not free anything).
+    3. Set the "evict_pointer" to the next cache in the cache list.
 
 >> C3: Describe your implementation of write-behind.
 
+1. Write cache blocks that are dirty back to the disk when they are evicted.
+
+2. Create a thread that utilizes timer_sleep() to automatically write
+dirty cache block back to disk every 5 seconds. 
+
 >> C4: Describe your implementation of read-ahead.
+
+
 
 ---- SYNCHRONIZATION ----
 

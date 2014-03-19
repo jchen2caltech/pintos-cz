@@ -178,6 +178,7 @@ bool inode_alloc_block(struct inode_disk* head, off_t length) {
     size_t sectors = bytes_to_sectors(head->length);
     size_t index_in_block;
     off_t left;
+    bool new_index_block = false;
     
     char zeros[BLOCK_SECTOR_SIZE];
     
@@ -200,6 +201,7 @@ bool inode_alloc_block(struct inode_disk* head, off_t length) {
         if (free_map_allocate(1, &index)) {
             block_i[MAX_BLOCKS] = 0;
             index_in_block = 0;
+            new_index_block = true;
         } else {
             return false;    
         }
@@ -219,8 +221,14 @@ bool inode_alloc_block(struct inode_disk* head, off_t length) {
         index_in_block = (sectors % MAX_BLOCKS);
     }
     
-    if (!free_map_allocate(1, &new))
+    if (!free_map_allocate(1, &new)){
+        
+        if (new_index_block){
+            prev_i[MAX_BLOCKS] = 0;
+            free_map_release(index, 1);
+        }
         return false;
+    }
     else {
         //printf("allocating new file sector: %d\n", new);
         block_i[index_in_block] = new;
@@ -322,14 +330,18 @@ void inode_close(struct inode *inode) {
                 free_map_release(inode->sector, 1);
                 free_map_release(inode->data.start,
                                 bytes_to_sectors(inode->data.length)); 
-            } else {
+            } else if (inode->data.start != 0) {
                 sectors = bytes_to_sectors(inode_length(inode));
+                
                 index_blocks = sectors / MAX_BLOCKS;
+                
                 if (sectors % MAX_BLOCKS != 0)
                     ++index_blocks;
+                //printf("sectors %d and index_blocks %d\n", sectors, index_blocks);
+                
                 cur_i = 0;
                 cur_sec = 0;
-                cur_block_i = inode_get_index_block(&inode->data, 1);
+                cur_block_i = inode_get_index_block(&inode->data, 0);
                 
                 while (cur_i < index_blocks && cur_sec <= sectors){
                     block_read(fs_device, cur_block_i, &block_i);
@@ -337,14 +349,21 @@ void inode_close(struct inode *inode) {
                         ++ cur_sec;
                         if (cur_sec > sectors)
                             break;
+                        //printf("releasing block%d\n", block_i[i]);
                         free_map_release(block_i[i], 1);
+                        //printf("done releasing block~~\n");
                     }
-                    cur_block_i = block_i[MAX_BLOCKS];
+                    //printf("releasing cur block %d\n", cur_block_i);
                     free_map_release(cur_block_i, 1);
+                    //printf("done releasing cur block\n");
+                    cur_block_i = block_i[MAX_BLOCKS];
+                    
+                    ++cur_i;
+                    
                 }
-                
-            }
             free_map_release(inode->sector, 1);
+            //printf("done removing\n");
+            }
             
         } else {
             block_write(fs_device, inode->sector, &inode->data);
@@ -458,7 +477,10 @@ off_t inode_write_at(struct inode *inode, const void *buffer_, off_t size, off_t
 
     if (inode_length(inode) < offset + size) {
         lock_acquire(&inode->lock);
-        inode_extend(inode, offset + size);
+        if (!inode_extend(inode, offset + size)) {
+            lock_release(&inode->lock);
+            return 0;
+        }
         lock_release(&inode->lock);
     }
 
@@ -569,7 +591,7 @@ static off_t inode_extend(struct inode *inode, off_t length) {
     while (length > 0) {
         chunk_size = length >= BLOCK_SECTOR_SIZE ? BLOCK_SECTOR_SIZE : length;
         if (!inode_alloc_block(head, chunk_size))
-            PANIC("not enough memory for file extension!");
+            return 0;
         length -= chunk_size;
         len_extended += chunk_size;
     }

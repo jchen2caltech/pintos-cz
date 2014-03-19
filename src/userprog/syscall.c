@@ -317,8 +317,8 @@ int open(const char *f_name) {
         return -1;
     }
     
-    if (strcmp(".", name) == 0 || strcmp("..", name) == 0)
-        return false;
+    /*if (strcmp(".", name) == 0 || strcmp("..", name) == 0)
+        return false;*/
     
     /* Open the file when locking the file system. */
     lock_acquire(&filesys_lock);
@@ -562,7 +562,7 @@ mapid_t mmap(uint32_t fd, void* addr){
     struct thread* t = thread_current();
     
     if (!checkva(addr))
-        exit(-1);
+        return MAP_FAIL;
 
     /* Check for the invalid conditions:
      * fd is standard io; file size of the given fd is 0; give user address

@@ -261,7 +261,7 @@ bool create(const char *f_name, unsigned initial_size) {
     
     /* Create the file, while locking the file system. */
     lock_acquire(&filesys_lock);
-    bool flag = filesys_dir_create(f_name, (off_t) initial_size, cur_dir);
+    bool flag = filesys_dir_create(name, (off_t) initial_size, cur_dir);
     lock_release(&filesys_lock);
 
 
@@ -274,6 +274,7 @@ bool remove(const char *f_name) {
     struct dir* cur_dir;
     char name[15];
     /* Checks the validity of the given pointer */
+    //printf("going to remove file %s\n\n", f_name);
     if (!checkva(f_name))
         return false;
     
@@ -282,8 +283,9 @@ bool remove(const char *f_name) {
         
     /* Remove the file, while locking the file system. */
     lock_acquire(&filesys_lock);
-    bool flag = filesys_dir_remove(f_name, cur_dir);
+    bool flag = filesys_dir_remove(name, cur_dir);
     lock_release(&filesys_lock);
+    //printf("name decomposed! %x\n\n", cur_dir);
     
     dir_close(cur_dir);
     return flag;
@@ -302,12 +304,13 @@ int open(const char *f_name) {
     struct inode* inode;
 
     /* Checks the validity of the given pointer */
-    if (!checkva(f_name) || f_name[0] == '\0')
+    if (!checkva(f_name) || f_name[0] == '\0'){
        return -1;
+    }
     
-    if (!decompose_dir(f_name, name, &cur_dir))
+    if (!decompose_dir(f_name, name, &cur_dir)){
         return -1;
-    //printf("name getting: %s\n", name);
+    }
     
     /* Open the file when locking the file system. */
     lock_acquire(&filesys_lock);
@@ -737,36 +740,34 @@ bool _chdir(const char* dir){
     struct inode* next_inode;
     struct dir* cur_dir;
     char name[15];
-    printf("chdir: %s\n", dir);
     if (!checkva(dir)){
        exit(-1);
     }
+   
+    //printf("changing dir to %s\n\n", dir); 
     if (!decompose_dir(dir, name, &cur_dir))
         return false;
-    printf("decompsed to %s\n", name);
     if (strcmp(name, "\0") != 0){
         if (!dir_lookup(cur_dir, name, &next_inode)) {
+            //printf("dir not found %s\n\n", name);
             dir_close(cur_dir);
-            printf("not found\n");
             return false;
         }
-            
+        //printf("dir found\n\n");    
         dir_close(cur_dir);
             
         if  (next_inode->data.type != DIR_INODE_DISK) {
             inode_close(next_inode);
-            printf("not dir\n");
             return false;
         }
-            
+        //printf("is a dir\n\n");
         cur_dir = dir_open(next_inode);
-            
+        
         if (cur_dir == NULL) {
             inode_close(next_inode);
-            printf("cur_dir cannot be opened");
             return false;
         }
-        
+        //printf("open succeed\n\n");
         
     } else if (dir[strlen(dir)] != '/'){
         dir_close(cur_dir);
@@ -785,7 +786,6 @@ bool _mkdir(const char* dir) {
     struct dir* cur_dir;
     char name[15];
     block_sector_t sector;
-    printf("mkdir: %s\n", dir);
     
     //printf("Checking name\n");
     if (!checkva(dir))
@@ -794,7 +794,6 @@ bool _mkdir(const char* dir) {
     if (!decompose_dir(dir, name, &cur_dir)){
         return false;
     }
-    printf("decompsed to %s\n", name);
     ASSERT(cur_dir != NULL);
     if (!free_map_allocate(1, &sector) || 
         !dir_create(sector, 0, dir_get_inode(cur_dir)->sector)){
@@ -802,7 +801,6 @@ bool _mkdir(const char* dir) {
         dir_close(cur_dir);
         return false;
     }
-    printf("assigned to sector %d\n", sector);
     if (!dir_add(cur_dir, name, sector)){
         free_map_release(sector, 1);
         dir_close(cur_dir);
@@ -810,7 +808,6 @@ bool _mkdir(const char* dir) {
     }
     
     dir_close(cur_dir);
-    printf("mk success\n");
     return true;
     
     
@@ -824,10 +821,10 @@ bool decompose_dir(const char* dir, char* ret_name, struct dir** par_dir){
     struct thread* t = thread_current();
     char name[15];
     
-    if (*dir == NULL || *dir == '\0')
+    if (*dir == NULL || dir[0] == '\0')
         return false;
 
-    if (*dir == '/') {
+    if (dir[0] == '/') {
         cur_dir = dir_open_root();
     } else if (t->cur_dir == NULL) {
         cur_dir = dir_open_root();

@@ -5,6 +5,7 @@
 #include "filesys/off_t.h"
 #include "devices/block.h"
 #include <list.h>
+#include "threads/synch.h"
 
 #define FILE_INODE_DISK 0
 #define NON_FILE_INODE_DISK 1

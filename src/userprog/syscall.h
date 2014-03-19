@@ -51,6 +51,5 @@ bool _readdir(uint32_t fd, char* name);
 bool _isdir(uint32_t fd);
 int _inumber(uint32_t fd);
 
-
 #endif /* userprog/syscall.h */
 

@@ -194,6 +194,14 @@ static void syscall_handler(struct intr_frame *f) {
             t->syscall = false;
             t->esp = NULL;
             break;
+        
+        case SYS_READDIR:
+            fd = (uint32_t) read4(f,4);
+            f_name = (char*) read4(f, 8);
+            f->eax = (uint32_t) _readdir(fd, f_name);
+            t->syscall = false;
+            t->esp = NULL;
+            break;
 
         default:
             exit(-1);
@@ -295,10 +303,11 @@ int open(const char *f_name) {
 
     /* Checks the validity of the given pointer */
     if (!checkva(f_name) || f_name[0] == '\0')
-       exit(-1);
+       return -1;
     
     if (!decompose_dir(f_name, name, &cur_dir))
-        return false;
+        return -1;
+    //printf("name getting: %s\n", name);
     
     /* Open the file when locking the file system. */
     lock_acquire(&filesys_lock);
@@ -309,6 +318,7 @@ int open(const char *f_name) {
             return -1;
         }
         isdir = (inode->data.type == DIR_INODE_DISK);
+        //printf("setting isdir: %d", isdir);
         if (isdir)
             d_open = dir_open(inode);
         else
@@ -316,7 +326,7 @@ int open(const char *f_name) {
         lock_release(&filesys_lock);
     } else {
         isdir = true;
-        d_open = dir_reopen(inode);
+        d_open = dir_reopen(cur_dir);
     }
     
     if (f_open == NULL && dir_open == NULL) {
@@ -326,13 +336,12 @@ int open(const char *f_name) {
     } else {
         t = thread_current();
         if (t->f_count > 127){
-            inode_close(inode);
             if (isdir){
-                file_close(f_open);    
-            } else {
                 dir_close(d_open);
+            } else {
+                file_close(f_open);  
             }
-            exit(-1);
+            return -1;
         }
         
         /* Set up new f_info */
@@ -354,7 +363,6 @@ int open(const char *f_name) {
         ++(t->f_count);
         lock_release(&filesys_lock);
     }
-    inode_close(inode);
     return fd;
 
 }
@@ -712,12 +720,16 @@ struct mmap_elem* find_mmap_elem(mapid_t mapid){
 
 int _inumber(uint32_t fd) {
     struct f_info* f = findfile(fd);
-    return f->f->inode->sector;
+    if (f->isdir)
+        return dir_get_inode(f->d)->sector;
+    else
+        return f->f->inode->sector;
 }
 
 bool _isdir(uint32_t fd){
     struct f_info* f = findfile(fd);
-    return f->f->inode->data.type == DIR_INODE_DISK;
+
+    return f->isdir;
 }
 
 bool _chdir(const char* dir){
@@ -732,26 +744,34 @@ bool _chdir(const char* dir){
     if (!decompose_dir(dir, name, &cur_dir))
         return false;
 
-    if (!dir_lookup(cur_dir, name, &next_inode)) {
+    if (strcmp(name, "\0") != 0){
+        if (!dir_lookup(cur_dir, name, &next_inode)) {
+            dir_close(cur_dir);
+            return false;
+        }
+            
         dir_close(cur_dir);
-        return false;
-    }
+            
+        if  (next_inode->data.type != DIR_INODE_DISK) {
+            inode_close(next_inode);
+            return false;
+        }
+            
+        cur_dir = dir_open(next_inode);
+            
+        if (cur_dir == NULL) {
+            inode_close(next_inode);
+            return false;
+        }
         
-    dir_close(cur_dir);
         
-    if  (next_inode->data.type != DIR_INODE_DISK) {
-        inode_close(next_inode);
-        return false;
-    }
-        
-    cur_dir = dir_open(next_inode);
-        
-    if (cur_dir == NULL) {
-        inode_close(next_inode);
+    } else if (dir[strlen(dir)] != '/'){
+        dir_close(cur_dir);
         return false;
     }
     
     t->cur_dir = cur_dir;
+    
     return true;
 }
 

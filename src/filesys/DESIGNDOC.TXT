@@ -191,6 +191,9 @@ dirty cache block back to disk every 5 seconds.
 
 >> C4: Describe your implementation of read-ahead.
 
+cache_read_create() creates a ghost thread that reads the "next" sector in
+the background. Every time cache_get() is 
+
 
 
 ---- SYNCHRONIZATION ----

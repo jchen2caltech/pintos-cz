@@ -31,10 +31,10 @@ struct cache_entry *cache_find(block_sector_t sector) {
     return NULL;
 }
 
-struct cache_entry *cache_get(block_sector_t sector, bool dirty) {
-    struct cache_entry *result;
+static struct cache_entry *cache_readin(block_sector_t sector, bool dirty) {
 
-    lock_acquire(&filesys_cache.cache_lock);
+    struct cache_entry *result;
+    
     if ((result = cache_find(sector)) != NULL) {
         //printf("found cache %d\n\n", result->sector);
         //printf("%d %x %x %x %x read cache found %d\n\n", result->dirty, result->cache_block[0], result->cache_block[1], result->cache_block[2], result->cache_block[3], result->sector);
@@ -65,6 +65,15 @@ struct cache_entry *cache_get(block_sector_t sector, bool dirty) {
     else {
         PANIC("EVICTION FAILURE: cache eviction undefined bug");
     }
+
+    return result;
+}
+
+struct cache_entry *cache_get(block_sector_t sector, bool dirty) {
+    struct cache_entry *result;
+
+    lock_acquire(&filesys_cache.cache_lock);
+    result = cache_readin(sector, dirty);
     lock_release(&filesys_cache.cache_lock);
     cache_read_create(sector);
     return result;
@@ -132,7 +141,7 @@ void cache_write_background(void *aux) {
 }
 
 void cache_read_ahead(void *aux) {
-    cache_get(*((block_sector_t *)aux), false);
+    cache_readin(*((block_sector_t *)aux), false);
     free(aux);
 }
 

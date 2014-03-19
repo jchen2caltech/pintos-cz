@@ -80,12 +80,12 @@ struct cache_entry *cache_evict(void) {
         if (result->accessed)
             result->accessed = false;
         else {
-            //if (result->dirty) {
+            if (result->dirty) {
               //  printf("writing back to sector %d\n\n", result->sector);
                 //printf("%x %x %x %x written cache\n\n", result->cache_block[0], result->cache_block[1], result->cache_block[2], result->cache_block[3]);
             
                 block_write(fs_device, result->sector, &result->cache_block);
-            //}
+            }
             if (curr->next == list_end(&filesys_cache.cache_list))
                 filesys_cache.evict_pointer = NULL;
             else
@@ -109,11 +109,11 @@ void cache_write_to_disk(bool shut) {
     while (curr && curr->next) {
         next = list_next(curr);
         curr_cache = list_entry(curr, struct cache_entry, elem);
-        //if (curr_cache->dirty) {
+        if (curr_cache->dirty) {
             block_write(fs_device, curr_cache->sector, 
                         &curr_cache->cache_block);
-            //curr_cache->dirty = false;
-        //}
+            curr_cache->dirty = false;
+        }
         if (shut) {
             list_remove(curr);
             free(curr_cache);

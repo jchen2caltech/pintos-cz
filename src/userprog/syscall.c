@@ -267,7 +267,7 @@ bool create(const char *f_name, unsigned initial_size) {
     bool flag = filesys_dir_create(name, (off_t) initial_size, cur_dir);
     lock_release(&filesys_lock);
 
-
+    dir_close(cur_dir);
     return flag;
 
 }

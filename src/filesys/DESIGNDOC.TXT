@@ -8,16 +8,17 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+    Jianchi Chen <jchen2@caltech.edu>
+    Taokun Zheng <tzheng@caltech.edu>
 
 >> Specify how many late tokens you are using on this assignment:  
 
+    None. 
+
 >> What is the Git repository and commit hash for your submission?
 
-   Repository URL:  
-   commit ...
+   Repository URL:  https://github.com/jchen2caltech/pintos-cz.git
+   commit
 
 ---- PRELIMINARIES ----
 

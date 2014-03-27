@@ -83,7 +83,7 @@ struct cache_entry *cache_get(block_sector_t sector, bool dirty) {
 
     result = cache_readin(sector, dirty);
     if (!dirty)
-        cache_read_ahead(sector);
+        cache_read_create(sector);
     return result;
 }
 

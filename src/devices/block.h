@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <inttypes.h>
+#include <list.h>
 
 /*! Size of a block device sector in bytes.  All IDE disks use this sector
     size, as do most USB and SCSI disks.  It's not worth it to try to cater
@@ -17,8 +18,6 @@ typedef uint32_t block_sector_t;
 #define PRDSNu PRIu32
 
 /*! Higher-level interface for file systems, etc. */
-
-struct block;
 
 /*! Type of a block device. */
 enum block_type {
@@ -36,6 +35,21 @@ enum block_type {
     BLOCK_FOREIGN,              /*!< Owned by non-Pintos operating system. */
     BLOCK_CNT                   /*!< Number of Pintos block types. */
     /*! @} */
+};
+
+/*! A block device. */
+struct block {
+    struct list_elem list_elem;         /*!< Element in all_blocks. */
+
+    char name[16];                      /*!< Block device name. */
+    enum block_type type;               /*!< Type of block device. */
+    block_sector_t size;                /*!< Size in sectors. */
+
+    const struct block_operations *ops;  /*!< Driver operations. */
+    void *aux;                          /*!< Extra data owned by driver. */
+
+    unsigned long long read_cnt;        /*!< Number of sectors read. */
+    unsigned long long write_cnt;       /*!< Number of sectors written. */
 };
 
 const char *block_type_name(enum block_type);

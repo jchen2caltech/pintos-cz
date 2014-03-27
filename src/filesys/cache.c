@@ -7,15 +7,20 @@
 #include "threads/thread.h"
 #include "threads/malloc.h"
 
+block_sector_t just_read;
+struct semaphore read_ahead_lock;
+
 /*! Initialize the cache system */
 void cache_init(void) {
     list_init(&filesys_cache.cache_list);
     lock_init(&filesys_cache.cache_lock);
     filesys_cache.cache_count = 0;
     filesys_cache.evict_pointer = NULL;
+    sema_init(&read_ahead_lock, 0);
     /* Create ghost thread for periodical write-back */
     thread_create("cache write background", PRI_DEFAULT, 
                   cache_write_background, NULL);
+    thread_create("cache read ahead", PRI_MIN + 1, cache_read_ahead, NULL);
 }
 
 /*! Find a cache in the cache list that corresponds to a given sector */
@@ -40,13 +45,11 @@ static struct cache_entry *cache_readin(block_sector_t sector, bool dirty) {
 
     struct cache_entry *result;
     
-    lock_acquire(&filesys_cache.cache_lock);
     /* If the cache already exists */
     if ((result = cache_find(sector)) != NULL) {
         result->dirty |= dirty;
         result->open_count++;
         result->accessed = true;
-        lock_release(&filesys_cache.cache_lock);
         return result;
     }
     /* If there is room for one more cache block, create one */
@@ -66,7 +69,6 @@ static struct cache_entry *cache_readin(block_sector_t sector, bool dirty) {
         result->dirty = dirty;
         result->accessed = true;
         result->open_count = 1;
-        lock_release(&filesys_cache.cache_lock);
         block_read(fs_device, sector, result->cache_block);
     }
     else {
@@ -81,9 +83,14 @@ static struct cache_entry *cache_readin(block_sector_t sector, bool dirty) {
 struct cache_entry *cache_get(block_sector_t sector, bool dirty) {
     struct cache_entry *result;
 
+    lock_acquire(&filesys_cache.cache_lock);
     result = cache_readin(sector, dirty);
-    if (!dirty)
-        cache_read_create(sector);
+    lock_release(&filesys_cache.cache_lock);
+    if (!dirty) {
+        just_read = sector;
+        sema_up(&read_ahead_lock);
+    }
+        
     return result;
 }
 
@@ -127,6 +134,8 @@ void cache_write_to_disk(bool shut) {
     struct cache_entry *curr_cache;
     struct list_elem *next;
 
+    if (shut)
+        just_read = -1;
     lock_acquire(&filesys_cache.cache_lock);
     while (curr && curr->next) {
         next = list_next(curr);
@@ -139,7 +148,6 @@ void cache_write_to_disk(bool shut) {
         if (shut) {
             /* Used for freeing the cache system */
             list_remove(curr);
-            free(curr_cache);
         }
         curr = next;
     }
@@ -156,19 +164,15 @@ void cache_write_background(void *aux) {
 }
 
 /* Main function for background read-ahead */
-void cache_read_ahead(void *aux) {
-    struct cache_entry *ahead = cache_readin(*((block_sector_t *)aux), false);
-    ahead->open_count--;
-    free(aux);
+void cache_read_ahead(void) {
+    while (true) {
+        sema_down(&read_ahead_lock);
+        if (just_read < fs_device->size) {
+            lock_acquire(&filesys_cache.cache_lock);
+            struct cache_entry *ahead = cache_readin(just_read + 1, false);
+            ahead->open_count--;
+            lock_release(&filesys_cache.cache_lock);
+        }
+    }
 }
 
-/* Create a read-ahead thread */
-void cache_read_create(block_sector_t toread) {
-    void *aux = malloc(sizeof(block_sector_t));
-    if (aux)
-        *((uint32_t *)aux) = toread + 1;
-    else
-        PANIC("MALLOC FAILURE: not enough memory");
-    thread_create("cache read ahead", PRI_DEFAULT, 
-                  cache_read_ahead, aux);
-}

@@ -340,10 +340,10 @@ void thread_exit(void) {
     struct thread_return_status *ctrs;
 
     ASSERT(!intr_context());
-
-#ifdef USERPROG
-    process_exit();
     t = thread_current();
+#ifdef USERPROG
+    if (t->type == THREAD_PROCESS)
+        process_exit();
     /* Free all remaining opened files */
     while (!list_empty(&t->f_lst)) {
         ce = list_pop_front(&t->f_lst);
@@ -364,14 +364,13 @@ void thread_exit(void) {
         dir_close(t->cur_dir);
 #endif
 
-
     /* Remove thread from all threads list, set our status to dying,
        and schedule another process.  That process will destroy us
        when it calls thread_schedule_tail(). */
     intr_disable();
     /*ASSERT(list_empty(&thread_current()->locks));*/
-    list_remove(&thread_current()->allelem);
-    thread_current()->status = THREAD_DYING;
+    list_remove(&t->allelem);
+    t->status = THREAD_DYING;
     schedule();
     NOT_REACHED();
 }
@@ -567,7 +566,7 @@ struct thread * running_thread(void) {
 
 /*! Returns true if T appears to point to a valid thread. */
 static bool is_thread(struct thread *t) {
-    return t != NULL && t->magic == THREAD_MAGIC;
+    return (t != NULL && t->magic == THREAD_MAGIC);
 }
 
 /*! Does basic initialization of T as a blocked thread named NAME. */

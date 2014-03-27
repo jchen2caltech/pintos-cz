@@ -649,7 +649,7 @@ off_t inode_write_at(struct inode *inode, const void *buffer_, off_t size,
                 break;
             
             /* Cache in*/
-            c = cache_get(sector_idx, true);
+            c = cache_get(sector_idx, false);
             /* Copy buffer to cache*/
             memcpy((uint8_t *)&c->cache_block + sector_ofs, 
                    buffer + bytes_written,
@@ -693,7 +693,6 @@ off_t inode_write_at(struct inode *inode, const void *buffer_, off_t size,
 
             /* Read the index data from the index sector*/
             block_read(fs_device, sector_idx, &block_i);
-            
             
             /* Cache in*/
             c = cache_get(block_i[index_in_block], true);

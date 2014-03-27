@@ -189,7 +189,6 @@ void process_exit(void) {
         file_close(cur->f_exe);
         cur->f_exe = NULL;
     }
-    
     pd = cur->pagedir;
     if (pd != NULL) {
         /* Correct ordering here is crucial.  We must set

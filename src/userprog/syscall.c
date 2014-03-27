@@ -453,10 +453,10 @@ int read(uint32_t fd, void *buffer, unsigned size) {
         off_t pos = f->pos;
         
         /* Read from the file at f->pos */
-        lock_acquire(&filesys_lock);
+        //lock_acquire(&filesys_lock);
         read_size = (int) file_read_at(fin, buffer, (off_t) size, pos);
         f->pos += (off_t) read_size;
-        lock_release(&filesys_lock);
+        //lock_release(&filesys_lock);
         
     }
     return read_size;
@@ -491,11 +491,11 @@ int write(uint32_t fd, const void *buffer, unsigned size) {
         off_t pos = f->pos;
         
         /* Write to the file at f->pos */
-        lock_acquire(&filesys_lock);
+        //lock_acquire(&filesys_lock);
         write_size = (int) file_write_at(fout, buffer, (off_t) size, pos);
 
         f->pos += (off_t) write_size;
-        lock_release(&filesys_lock);
+        //lock_release(&filesys_lock);
         
     }
 

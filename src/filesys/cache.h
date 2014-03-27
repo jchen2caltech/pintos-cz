@@ -40,7 +40,6 @@ struct cache_entry * cache_evict(void);
 
 void cache_write_to_disk(bool shut);
 void cache_write_background(void *aux);
-void cache_read_ahead(void *aux);
-void cache_read_create(block_sector_t toread);
+void cache_read_ahead(void);
 
 #endif

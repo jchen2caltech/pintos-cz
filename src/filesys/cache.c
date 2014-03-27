@@ -40,10 +40,13 @@ static struct cache_entry *cache_readin(block_sector_t sector, bool dirty) {
 
     struct cache_entry *result;
     
+    lock_acquire(&filesys_cache.cache_lock);
     /* If the cache already exists */
     if ((result = cache_find(sector)) != NULL) {
         result->dirty |= dirty;
         result->open_count++;
+        result->accessed = true;
+        lock_release(&filesys_cache.cache_lock);
         return result;
     }
     /* If there is room for one more cache block, create one */
@@ -63,6 +66,7 @@ static struct cache_entry *cache_readin(block_sector_t sector, bool dirty) {
         result->dirty = dirty;
         result->accessed = true;
         result->open_count = 1;
+        lock_release(&filesys_cache.cache_lock);
         block_read(fs_device, sector, result->cache_block);
     }
     else {
@@ -77,9 +81,9 @@ static struct cache_entry *cache_readin(block_sector_t sector, bool dirty) {
 struct cache_entry *cache_get(block_sector_t sector, bool dirty) {
     struct cache_entry *result;
 
-    lock_acquire(&filesys_cache.cache_lock);
     result = cache_readin(sector, dirty);
-    lock_release(&filesys_cache.cache_lock);
+    if (!dirty)
+        cache_read_ahead(sector);
     return result;
 }
 
@@ -153,7 +157,8 @@ void cache_write_background(void *aux) {
 
 /* Main function for background read-ahead */
 void cache_read_ahead(void *aux) {
-    cache_readin(*((block_sector_t *)aux), false);
+    struct cache_entry *ahead = cache_readin(*((block_sector_t *)aux), false);
+    ahead->open_count--;
     free(aux);
 }
 
@@ -164,6 +169,6 @@ void cache_read_create(block_sector_t toread) {
         *((uint32_t *)aux) = toread + 1;
     else
         PANIC("MALLOC FAILURE: not enough memory");
-    thread_create("cache read ahead", PRI_MIN, 
+    thread_create("cache read ahead", PRI_DEFAULT, 
                   cache_read_ahead, aux);
 }
